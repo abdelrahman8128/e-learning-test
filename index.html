@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Urine Analysis Virtual Lab</title>
+  <meta name="description" content="Interactive Biochemistry 2 virtual laboratory: qualitative detection of abnormal constituents in urine, with laboratory safety training.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-phase="intro">
+  <header id="topbar">
+    <div class="brand"><span class="logo">🧪</span><div><strong>Biochemistry 2 · Virtual Lab</strong><small>Abnormal constituents of urine</small></div></div>
+    <div id="hdr-dyn"></div>
+    <div class="hdr-btns">
+      <button class="btn sm" id="btn-help">❓ Help</button>
+      <button class="btn sm" id="btn-end">⏹ End session</button>
+      <button class="btn sm" id="btn-restart">↻ Restart</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <aside id="left" aria-label="Objective, tasks and PPE"></aside>
+    <section id="center">
+      <div id="map" aria-label="Laboratory floor plan"></div>
+      <div id="station" aria-live="polite"></div>
+    </section>
+    <aside id="right" aria-label="Controls and warnings"></aside>
+  </main>
+
+  <div id="intro-root"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+
+  <noscript><p style="padding:2rem">This virtual laboratory requires JavaScript.</p></noscript>
+
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/safety.js"></script>
+  <script src="js/experiments.js"></script>
+  <script src="js/quiz.js"></script>
+  <script src="js/incidents.js"></script>
+  <script src="js/cleanup.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
