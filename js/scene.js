@@ -22,13 +22,31 @@
       (sub ? '<text x="' + (x + w / 2) + '" y="' + (y + h / 2 + 12) + '" text-anchor="middle" class="sub">' + sub + '</text>' : '') + '</g>';
   }
 
-  Scene.mapSVG = function () {
+  /** The station the student should head to for the current task (null if none). */
+  Scene.targetStation = function () {
     var s = S(), cur = L.currentExp();
-    var target = null;
-    if (s.phase === 'lab' && cur) {
-      target = L.expDef(cur.id).station;
-      if (cur.id === 'rothera' && L.Exp.isDone(cur, 'mix')) target = 'hood';
-    }
+    if (s.phase === 'entry') return 'entrance';
+    if (s.phase === 'cleanup') return L.Cleanup.allDone() ? 'entrance' : null;
+    if (s.phase !== 'lab' || !cur) return null;
+    if (cur.id === 'rothera' && (L.Exp.isDone(cur, 'mix') || cur.tube.where === 'hood')) return 'hood';
+    return L.expDef(cur.id).station;
+  };
+
+  /** Compact row of station buttons (focus mode and phones). */
+  Scene.stationChips = function () {
+    var s = S(), target = Scene.targetStation();
+    var short = { entrance: '🚪 Entrance', bench1: '1 · Heat', bench2: '2 · Benedict', bench3: '3 · Rothera', bench4: '4 · Hay',
+      hood: '🌀 Fume hood', laminar: 'Laminar', sink: '🚰 Sink', tech: '🧑‍🔧 Technician', ta: '👩‍🔬 TA' };
+    return Object.keys(short).map(function (id) {
+      var done = /^bench(\d)$/.test(id) && s.exps[+id.slice(5) - 1].done;
+      return '<button class="chip' + (s.station === id ? ' here' : '') + (target === id && s.station !== id ? ' target' : '') + '" data-goto="' + id + '"' +
+        (s.station === id ? ' aria-current="location"' : '') + ' title="' + UI.esc(L.STATIONS[id].name) + '">' + short[id] + (done ? ' ✓' : '') + '</button>';
+    }).join('');
+  };
+
+  Scene.mapSVG = function () {
+    var s = S();
+    var target = s.phase === 'lab' ? Scene.targetStation() : null;
     function tag(id) { return target === id ? ' target' : ''; }
     var done = function (n) { return s.exps[n - 1].done ? ' ✔' : ''; };
     var h = '<svg viewBox="0 0 1000 272" class="map-svg" role="img" aria-label="Laboratory floor plan">' +

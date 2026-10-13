@@ -58,6 +58,13 @@ to any static web server, such as GitHub Pages or a university LMS.
   for the authorised cleanup and get clearance. Picking up glass, hiding it, walking away or
   continuing to work are critical violations.
 
+### Layout & devices
+
+- **Desktop/laptop.** The **☰ Tasks** and **💬 Feedback** buttons in the top bar hide or show the side panels; the choice is remembered on that browser. A red badge counts new warnings while the feedback panel is hidden.
+- **Focus mode (⛶).** Hides the floor plan and side panels so the workbench fills the window. A compact bar keeps the current objective and one-tap station buttons visible. **Full screen** uses the browser's full-screen mode; **Esc** or **Exit focus** returns.
+- **Tablet.** A single column: objective, workstation, then tasks, PPE and feedback.
+- **Phone (≤ 640 px).** One section at a time, chosen from a bottom tab bar: **Bench**, **Map**, **Tasks**, **Feedback**. Dialogs open as bottom sheets. Tapping a station on the map walks there and returns to the bench.
+
 ### Scoring
 
 | Category | How it is scored |

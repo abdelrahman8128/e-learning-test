@@ -12,20 +12,33 @@
     <div class="brand"><span class="logo">🧪</span><div><strong>Biochemistry 2 · Virtual Lab</strong><small>Abnormal constituents of urine</small></div></div>
     <div id="hdr-dyn"></div>
     <div class="hdr-btns">
-      <button class="btn sm" id="btn-help">❓ Help</button>
-      <button class="btn sm" id="btn-end">⏹ End session</button>
-      <button class="btn sm" id="btn-restart">↻ Restart</button>
+      <div class="view-btns" role="group" aria-label="Layout">
+        <button class="btn sm view-btn" data-view="left" aria-pressed="true" title="Show or hide the task list and PPE panel"><span aria-hidden="true">☰</span><span class="lbl"> Tasks</span></button>
+        <button class="btn sm view-btn" data-view="right" aria-pressed="true" title="Show or hide warnings and feedback"><span aria-hidden="true">💬</span><span class="lbl"> Feedback</span><b class="badge" hidden></b></button>
+        <button class="btn sm view-btn" data-view="focus" aria-pressed="false" title="Focus mode: enlarge the workbench"><span aria-hidden="true">⛶</span><span class="lbl"> Focus</span></button>
+      </div>
+      <button class="btn sm" id="btn-help" title="Help"><span aria-hidden="true">❓</span><span class="lbl"> Help</span></button>
+      <button class="btn sm" id="btn-end" title="End session"><span aria-hidden="true">⏹</span><span class="lbl"> End session</span></button>
+      <button class="btn sm" id="btn-restart" title="Restart"><span aria-hidden="true">↻</span><span class="lbl"> Restart</span></button>
     </div>
   </header>
 
   <main id="app">
     <aside id="left" aria-label="Objective, tasks and PPE"></aside>
     <section id="center">
+      <div id="focusbar" aria-label="Current objective and quick navigation"></div>
       <div id="map" aria-label="Laboratory floor plan"></div>
       <div id="station" aria-live="polite"></div>
     </section>
     <aside id="right" aria-label="Controls and warnings"></aside>
   </main>
+
+  <nav id="tabbar" aria-label="Sections">
+    <button data-tab="bench" aria-current="page"><span class="ti" aria-hidden="true">🧪</span><span>Bench</span></button>
+    <button data-tab="map"><span class="ti" aria-hidden="true">🗺️</span><span>Map</span></button>
+    <button data-tab="tasks"><span class="ti" aria-hidden="true">☰</span><span>Tasks</span></button>
+    <button data-tab="feedback"><span class="ti" aria-hidden="true">💬</span><span>Feedback</span><b class="badge" hidden></b></button>
+  </nav>
 
   <div id="intro-root"></div>
   <div id="modal-root"></div>

@@ -30,11 +30,106 @@
     if (S.phase === 'intro') return;
     renderLeft();
     renderRight();
+    renderFocusbar();
     var map = $('#map');
     map.innerHTML = L.Scene.mapSVG();
     L.Scene.afterMapRender(map);
     renderStation();
+    applyView();
   };
+
+  /* ------------------------------------------------------------------ */
+  /* Layout / view state (UI preference only — not part of the session)  */
+  /* ------------------------------------------------------------------ */
+  var VIEW_KEY = 'vlab-view-v1';
+  var View = L.View = { left: true, right: true, focus: false, tab: 'bench', seenAt: 0 };
+  try {
+    var saved = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
+    if (typeof saved.left === 'boolean') View.left = saved.left;
+    if (typeof saved.right === 'boolean') View.right = saved.right;
+  } catch (e) { /* storage unavailable — use defaults */ }
+
+  function saveView() {
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify({ left: View.left, right: View.right })); } catch (e) { /* ignore */ }
+  }
+
+  var phoneQuery = window.matchMedia ? window.matchMedia('(max-width: 640px)') : { matches: false };
+  L.isPhone = function () { return phoneQuery.matches; };
+
+  /** Is the feedback list currently on screen? */
+  function feedbackVisible() {
+    if (L.isPhone()) return View.tab === 'feedback';
+    return View.right && !View.focus;
+  }
+
+  function unreadCount() {
+    if (!L.S) return 0;
+    return L.S.log.filter(function (e) { return e.t > View.seenAt && (e.type === 'violation' || e.type === 'technique'); }).length;
+  }
+
+  function applyView() {
+    var b = document.body, phase = L.S ? L.S.phase : 'intro';
+    var inGame = phase !== 'intro' && phase !== 'report';
+    b.classList.toggle('hide-left', !View.left);
+    b.classList.toggle('hide-right', !View.right);
+    b.classList.toggle('focus-mode', View.focus && inGame);
+    ['bench', 'map', 'tasks', 'feedback'].forEach(function (t) { b.classList.toggle('tab-' + t, View.tab === t); });
+    if (feedbackVisible()) View.seenAt = Date.now();
+    var n = unreadCount();
+    UI.$$('.view-btn').forEach(function (btn) {
+      var k = btn.dataset.view;
+      var on = k === 'focus' ? View.focus : (View[k] && !View.focus);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.classList.toggle('on', on);
+    });
+    UI.$$('#topbar .badge, #tabbar .badge').forEach(function (el) {
+      el.hidden = !n;
+      el.textContent = n > 9 ? '9+' : n;
+    });
+    if (L.isPhone() && View.tab === 'map' && L.S && L.STATIONS[L.S.station]) {
+      var m = $('#map'), svg = m.querySelector('svg');
+      if (svg) m.scrollLeft = Math.max(0, L.STATIONS[L.S.station].x / 1000 * svg.clientWidth - m.clientWidth / 2);
+    }
+    UI.$$('#tabbar [data-tab]').forEach(function (btn) {
+      if (btn.dataset.tab === View.tab) btn.setAttribute('aria-current', 'page');
+      else btn.removeAttribute('aria-current');
+    });
+  }
+  L.applyView = applyView;
+
+  L.setView = function (key, value) {
+    if (key === 'tab') {
+      if (View.tab === value) return;
+      View.tab = value;
+      window.scrollTo(0, 0);
+    } else if (key === 'focus') {
+      View.focus = value == null ? !View.focus : !!value;
+      if (!View.focus && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    } else {
+      // showing a side panel leaves focus mode
+      if (View.focus) { View.focus = false; View[key] = true; }
+      else View[key] = value == null ? !View[key] : !!value;
+      saveView();
+    }
+    applyView();
+  };
+
+  function toggleFullscreen() {
+    var el = document.documentElement;
+    if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); return; }
+    if (el.requestFullscreen) el.requestFullscreen().catch(function () { UI.toast('Your browser blocked full screen.', 'info'); });
+    else UI.toast('Full screen is not supported in this browser.', 'info');
+  }
+
+  function renderFocusbar() {
+    var S = L.S, o = objective();
+    $('#focusbar').innerHTML =
+      '<div class="fb-top"><div class="fb-obj"><span class="fb-title">' + o.title + '</span><span class="fb-text">' + o.text + '</span></div>' +
+      '<div class="fb-acts">' +
+      '<button class="btn sm fb-fs" data-act="fullscreen" title="Browser full screen">⛶ Full screen</button>' +
+      '<button class="btn sm primary fb-exit" data-view="focus">✕ Exit focus</button></div></div>' +
+      (S.phase === 'entry' ? '' : '<div class="chips" role="group" aria-label="Go to station">' + L.Scene.stationChips() + '</div>');
+  }
 
   function progress() {
     var S = L.S, total = 1, done = S.phase === 'entry' || S.phase === 'intro' ? 0 : 1;
@@ -80,7 +175,8 @@
 
   function renderLeft() {
     var S = L.S, o = objective();
-    var h = '<section class="card objective"><h3>Current objective</h3><div class="obj-title">' + o.title + '</div><p>' + o.text + '</p></section>';
+    var h = '<div class="panel-bar"><span>Objective, tasks & PPE</span><button class="icon-btn sm" data-view="left" title="Hide this panel" aria-label="Hide tasks panel">⟨</button></div>' +
+      '<section class="card objective"><h3>Current objective</h3><div class="obj-title">' + o.title + '</div><p>' + o.text + '</p></section>';
     h += '<section class="card tasks"><h3>Task list</h3><ol class="phases">';
     h += '<li class="' + (S.phase === 'entry' ? 'cur' : 'done') + '"><span>PPE inspection & entry</span></li>';
     S.exps.forEach(function (e, i) {
@@ -126,7 +222,8 @@
     var sev = { minor: 0, major: 0, critical: 0 };
     S.violations.forEach(function (v) { sev[v.severity]++; });
     var canReset = S.phase === 'lab' && !(S.incident && S.incident.stage !== 'cleared');
-    var h = '<section class="card controls"><h3>Controls</h3>' +
+    var h = '<div class="panel-bar"><button class="icon-btn sm" data-view="right" title="Hide this panel" aria-label="Hide feedback panel">⟩</button><span>Controls & feedback</span></div>' +
+      '<section class="card controls"><h3>Controls</h3>' +
       '<button class="btn block" data-act="reset-exp"' + (canReset ? '' : ' disabled') + '>↺ Reset current experiment</button>' +
       '<button class="btn block" data-act="ta-hint">💡 Ask a TA for a hint</button>' +
       '<button class="btn block" data-act="ta-rules">📋 Safety rules</button>' +
@@ -170,10 +267,14 @@
   function onClick(e) {
     var S = L.S;
     if (!S) return;
+    var vb = e.target.closest('[data-view]');
+    if (vb) { L.setView(vb.dataset.view); return; }
+    var tb = e.target.closest('#tabbar [data-tab]');
+    if (tb) { L.setView('tab', tb.dataset.tab); return; }
     var g = e.target.closest('[data-goto]');
-    if (g) { e.preventDefault(); L.Scene.goTo(g.dataset.goto); return; }
+    if (g) { e.preventDefault(); goFromUI(g.dataset.goto); return; }
     var stn = e.target.closest('#map [data-station]');
-    if (stn) { L.Scene.goTo(stn.dataset.station); return; }
+    if (stn) { goFromUI(stn.dataset.station); return; }
     var btn = e.target.closest('[data-button]');
     if (btn) { L.Scene.toggleButton(+btn.dataset.button); return; }
     var a = e.target.closest('[data-act]');
@@ -186,7 +287,15 @@
     L.requestRender();
   }
 
+  /** Navigation started by the student: on phones, jump back to the bench tab. */
+  function goFromUI(dest) {
+    var before = L.S.station;
+    L.Scene.goTo(dest);
+    if (L.isPhone() && (L.S.station !== before || dest === before)) L.setView('tab', 'bench');
+  }
+
   var GLOBAL = {
+    fullscreen: function () { toggleFullscreen(); },
     enter: function () { L.Scene.enter(); },
     ppe: function (a) {
       var S = L.S, k = a.dataset.v;
@@ -255,6 +364,7 @@
     if (hidden) caseId = L.SCENARIOS[Math.floor(Math.random() * L.SCENARIOS.length)].id;
     L.S = L.newState(caseId, hidden);
     L.S.phase = 'entry';
+    View.tab = 'bench'; View.focus = false; View.seenAt = Date.now();
     L.Scene.resetMap();
     $('#intro-root').innerHTML = '';
     $('#modal-root').innerHTML = '';
@@ -275,8 +385,11 @@
         L.S = L.newState('healthy'); L.S.phase = 'intro';
         $('#modal-root').innerHTML = '';
         $('#left').innerHTML = ''; $('#right').innerHTML = ''; $('#map').innerHTML = ''; $('#station').innerHTML = '';
+        $('#focusbar').innerHTML = '';
         renderHeader();
         document.body.dataset.phase = 'intro';
+        View.focus = false; View.tab = 'bench';
+        applyView();
         showIntro();
       } }]
     });
@@ -298,6 +411,7 @@
       title: '❓ Help', dismiss: true, cls: 'help-modal',
       body: '<ul><li><strong>Move</strong> by clicking a station on the floor plan. The pulsing outline shows where your current task is.</li>' +
         '<li><strong>Drag & drop</strong> items onto targets (dashed outline). On a tablet you can tap an item and then tap its target.</li>' +
+        '<li><strong>Layout</strong>: use <strong>☰ Tasks</strong> and <strong>💬 Feedback</strong> (top bar) to hide or show the side panels, and <strong>⛶ Focus</strong> to make the workbench fill the screen (Esc to exit). On a phone, use the tabs at the bottom.</li>' +
         '<li><strong>PPE</strong>: put gloves and goggles on/off in the “Your PPE” panel.</li>' +
         '<li><strong>Heating</strong>: attach the holder, then drag the tube to the burner (or press “Heat at burner”). Set the burner, flame region, angle, direction and motion before starting.</li>' +
         '<li><strong>Glassware</strong> released outside the workstation falls and breaks. Report breakages to the TA.</li>' +
@@ -326,12 +440,17 @@
       if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-station], [data-button], .stool, [data-drag], [data-drop]')) {
         e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       }
-      if (e.key === 'Escape') UI.DnD.clearSelection();
+      if (e.key === 'Escape') {
+        UI.DnD.clearSelection();
+        if (View.focus && !UI.modalOpen() && !document.fullscreenElement) L.setView('focus', false);
+      }
     });
     UI.DnD.init(document.getElementById('app'));
     $('#btn-help').addEventListener('click', showHelp);
     $('#btn-end').addEventListener('click', confirmEnd);
     $('#btn-restart').addEventListener('click', confirmRestart);
+    if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', function () { applyView(); });
+    applyView();
     setInterval(tick, 250);
     document.body.dataset.phase = 'intro';
     showIntro();

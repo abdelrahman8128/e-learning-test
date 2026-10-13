@@ -377,6 +377,27 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
   await shot('s13-report');
   await page.screenshot({ path: path.join(SHOTS || require('os').tmpdir(), 'report-full.png'), fullPage: true }).catch(() => {});
 
+  console.log('\nLayout — collapsible panels, focus mode, phone tabs');
+  await page.click('.report [data-act="restart"]'); await page.click('#modal-root .btn.danger'); await wait(200);
+  await page.click('[data-case="healthy"]'); await closeModals();
+  const cls = () => page.evaluate(() => document.body.className);
+  await page.click('#topbar [data-view="left"]'); await wait(100);
+  ok((await cls()).includes('hide-left') && !(await page.isVisible('#left')), 'tasks panel hides');
+  await page.click('#topbar [data-view="right"]'); await wait(100);
+  ok(!(await page.isVisible('#right')), 'feedback panel hides');
+  await page.click('#topbar [data-view="left"]'); await page.click('#topbar [data-view="right"]'); await wait(100);
+  ok(await page.isVisible('#left') && await page.isVisible('#right'), 'panels come back');
+  await page.click('#topbar [data-view="focus"]'); await wait(150);
+  ok(await page.isVisible('#focusbar') && !(await page.isVisible('#map')) && !(await page.isVisible('#left')), 'focus mode shows only the bench');
+  await page.keyboard.press('Escape'); await wait(150);
+  ok(await page.isVisible('#map'), 'Esc leaves focus mode');
+  await page.setViewportSize({ width: 390, height: 844 }); await wait(200);
+  ok(await page.isVisible('#tabbar') && await page.isVisible('#station') && !(await page.isVisible('#map')), 'phone: bench tab by default');
+  await page.click('#tabbar [data-tab="tasks"]'); await wait(100);
+  ok(await page.isVisible('#left .tasks') && !(await page.isVisible('#station')), 'phone: tasks tab');
+  await page.setViewportSize({ width: 1440, height: 1000 }); await wait(100);
+  ok(!(await page.isVisible('#tabbar')), 'tab bar hidden on desktop');
+
   ok(errors.length === 0, 'no JavaScript errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   console.log('\n' + passes + ' passed, ' + failures + ' failed');
   await browser.close();
