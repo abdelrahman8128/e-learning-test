@@ -10,7 +10,7 @@ window.Lab = window.Lab || {};
   /* ---------- Protocol quantities (edit to match the approved manual) ---------- */
   L.PROTOCOL = {
     tubeCapacity: 15, // mL — standard test tube used for drawing and fill levels
-    albumin: { urineMin: 5, urineMax: 6, aceticDrops: 2 },
+    albumin: { urineMin: 5, urineMax: 6 },
     benedict: {
       urine: 3, benedict: 2,
       boilTarget: 120,  // simulated seconds of boiling
@@ -33,32 +33,32 @@ window.Lab = window.Lab || {};
     {
       id: 'healthy', code: 'Case A', name: 'Routine screening — healthy volunteer',
       history: 'A 22-year-old student attending a routine health check. No symptoms.',
-      albumin: false, phosphates: true, glucose: 0, ketones: false, bile: false
+      albumin: false, glucose: 0, ketones: false, bile: false
     },
     {
       id: 'dka', code: 'Case B', name: 'Type 1 diabetes with vomiting',
       history: 'A 19-year-old with type 1 diabetes, missed insulin doses, vomiting, rapid breathing and a fruity odour on the breath.',
-      albumin: false, phosphates: false, glucose: 4, ketones: true, bile: false
+      albumin: false, glucose: 4, ketones: true, bile: false
     },
     {
       id: 'nephrotic', code: 'Case C', name: 'Generalised oedema',
       history: 'A 30-year-old with swelling around the eyes and ankles and frothy urine.',
-      albumin: true, phosphates: false, glucose: 0, ketones: false, bile: false
+      albumin: true, glucose: 0, ketones: false, bile: false
     },
     {
       id: 'jaundice', code: 'Case D', name: 'Obstructive jaundice',
       history: 'A 55-year-old with yellow sclerae, itching, pale stools and dark urine.',
-      albumin: false, phosphates: false, glucose: 0, ketones: false, bile: true
+      albumin: false, glucose: 0, ketones: false, bile: true
     },
     {
       id: 'gestational', code: 'Case E', name: 'Antenatal visit — mild glycosuria',
       history: 'A 28-year-old at 26 weeks of pregnancy attending a routine antenatal check.',
-      albumin: false, phosphates: true, glucose: 1, ketones: false, bile: false
+      albumin: false, glucose: 1, ketones: false, bile: false
     },
     {
       id: 'nephropathy', code: 'Case F', name: 'Long-standing type 2 diabetes',
       history: 'A 60-year-old with poorly controlled type 2 diabetes for 15 years and rising blood pressure.',
-      albumin: true, phosphates: false, glucose: 3, ketones: false, bile: false
+      albumin: true, glucose: 3, ketones: false, bile: false
     }
   ];
 
@@ -136,24 +136,24 @@ window.Lab = window.Lab || {};
       id: 'albumin', num: 1, station: 'bench1',
       title: 'Heat test for albumin',
       objective: 'Detect the possible presence of albumin (protein) in urine.',
-      reagents: ['sample', 'acetic', 'benedict', 'sulfur'],
+      reagents: ['sample', 'benedict', 'sulfur'],
       hasBurner: true,
       steps: [
         { id: 'sample', text: 'Transfer 5–6 mL of urine into a clean test tube.' },
         { id: 'holder', text: 'Secure the test tube in a test tube holder.' },
+        { id: 'ppe', text: 'Make sure you wear a fully buttoned laboratory coat, gloves and protective goggles.' },
         { id: 'heat', text: 'Heat the upper part of the urine to boiling using safe technique (drag the tube to the burner).' },
-        { id: 'acid', text: 'Add 2 drops of 1% acetic acid.' },
-        { id: 'rack', text: 'Place the tube in the rack.' },
-        { id: 'observe', text: 'Observe the heated (upper) part against the unheated lower part.' },
+        { id: 'rack', text: 'When it is safe to handle, stand the tube in the rack (still using the holder).' },
+        { id: 'observe', text: 'Observe the heated upper part for protein coagulation, comparing it with the unheated lower part.' },
         { id: 'interpret', text: 'Interpret the result.' }
       ],
-      notes: 'This is a qualitative test: it shows whether albumin is possibly present, not how much. Heat coagulates protein; the acetic acid dissolves turbidity caused by phosphates/carbonates, so turbidity that persists after acid suggests protein.'
+      notes: 'Heat denatures albumin, which then coagulates into white, cloudy masses in the heated part of the urine. No other reagent is added. Protein coagulation indicates the possible presence of albumin. This is a qualitative test: it shows whether albumin is possibly present, not how much.'
     },
     {
       id: 'benedict', num: 2, station: 'bench2',
       title: 'Benedict\'s test for glucose (reducing sugars)',
       objective: 'Detect reducing sugars, including glucose, in urine.',
-      reagents: ['sample', 'benedict', 'acetic', 'rothera'],
+      reagents: ['sample', 'benedict', 'rothera', 'sulfur'],
       hasBurner: true,
       steps: [
         { id: 'sample', text: 'Add 3 mL of urine to a test tube.' },
@@ -189,7 +189,7 @@ window.Lab = window.Lab || {};
       id: 'hay', num: 4, station: 'bench4',
       title: 'Hay\'s sulfur test for bile salts',
       objective: 'Detect the possible presence of bile salts in urine.',
-      reagents: ['sample', 'sulfur', 'rothera', 'acetic'],
+      reagents: ['sample', 'sulfur', 'rothera', 'benedict'],
       hasBurner: false,
       steps: [
         { id: 'sample', text: 'Fill a test tube to about two-thirds of its capacity with urine.' },
@@ -204,7 +204,6 @@ window.Lab = window.Lab || {};
   /* ---------- Reagent catalogue (bench tray items) ---------- */
   L.REAGENTS = {
     sample: { label: 'Urine sample', short: 'Urine', color: '#f1cf5b', kind: 'sample' },
-    acetic: { label: '1% acetic acid (dropper)', short: '1% Acetic acid', color: '#e8f1f8', kind: 'acid', hazard: 'Acid — goggles' },
     benedict: { label: 'Benedict\'s reagent', short: 'Benedict\'s', color: '#2f78c9', kind: 'reagent' },
     rothera: { label: 'Rothera\'s reagent (powder)', short: 'Rothera\'s', color: '#f4f1ea', kind: 'powder' },
     ammonia: { label: 'Ammonium hydroxide (fume hood only)', short: 'NH₄OH', color: '#e9f3ff', kind: 'hazard', hazard: 'Fumes — hood + goggles' },

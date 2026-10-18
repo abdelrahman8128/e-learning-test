@@ -36,6 +36,70 @@
     L.requestRender();
   };
 
+  /* ------------------------------------------------------------------ */
+  /* Decision questions. Options are shown in random order and with      */
+  /* identical styling, so nothing reveals the correct answer.           */
+  /* ------------------------------------------------------------------ */
+  var QUESTIONS = {
+    report: {
+      prompt: 'A test tube has just broken. What should you do next?',
+      options: [
+        { v: 'report', correct: true,
+          label: 'Stop, keep away from the broken glass and report the incident to a laboratory TA.',
+          fb: 'Correct. Stopping, keeping clear and reporting immediately protects you and everyone nearby. Only authorised staff clean up broken glass and urine spills.' },
+        { v: 'pickup', label: 'Pick up the broken glass carefully with your gloved hands.',
+          v2: { id: 'glass-pickup', rule: 'broken_touch', title: 'Picking up broken glass',
+            consequence: 'Glass fragments cut through gloves easily, and the cut is contaminated with urine — a route for infection. Only authorised staff with a brush, dustpan and broken-glass bin clean breakages.' } },
+        { v: 'continue', label: 'Continue the experiment and deal with the glass at the end of the session.',
+          v2: { id: 'glass-continue', rule: 'broken_conceal', title: 'Continuing next to broken glass',
+            consequence: 'Working beside broken glass exposes you and others to cuts, the spill spreads, and nobody responsible knows the hazard is there.' } },
+        { v: 'clean', label: 'Clean the area yourself with paper towels without informing anyone.',
+          v2: { id: 'glass-hide', rule: 'broken_conceal', title: 'Cleaning up without reporting',
+            consequence: 'Handling the glass risks cuts, paper towels do not disinfect a urine spill, and an unreported incident cannot be checked or recorded. Concealing an incident is a serious breach of laboratory rules.' } }
+      ]
+    },
+    clear: {
+      prompt: 'The TA has acknowledged your report. What do you do now?',
+      options: [
+        { v: 'wait', correct: true,
+          label: 'Stay clear of the affected area and wait for the TA\'s clearance before continuing.',
+          fb: 'Correct. The area stays out of bounds until authorised staff have removed the glass, disinfected the spill and cleared it.' },
+        { v: 'help', label: 'Help the technician by picking up the large pieces of glass.',
+          v2: { id: 'glass-help', rule: 'broken_touch', title: 'Handling broken glass to help',
+            consequence: 'Even with good intentions, untrained handling causes cuts and contamination. The technician has the right tools and the broken-glass bin.' } },
+        { v: 'resume', label: 'Return to your bench and carry on working around the glass.',
+          v2: { id: 'glass-resume', rule: 'broken_conceal', title: 'Working in the affected area',
+            consequence: 'The area must be cleared before anyone works there — you could kneel or lean on fragments and spread the spill.' } },
+        { v: 'mop', label: 'Wipe up the spilled urine yourself to speed things up.',
+          v2: { id: 'glass-mop', rule: 'broken_touch', title: 'Cleaning the spill yourself',
+            consequence: 'The spill contains hidden glass fragments and potentially infectious urine. It must be cleaned and disinfected by authorised staff.' } }
+      ]
+    }
+  };
+
+  function shuffled(n) {
+    var a = []; for (var i = 0; i < n; i++) a.push(i);
+    for (var j = n - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var t = a[j]; a[j] = a[k]; a[k] = t; }
+    return a;
+  }
+
+  function questionHTML(inc, key) {
+    var q = QUESTIONS[key];
+    if (!inc.order) inc.order = {};
+    if (!inc.order[key]) inc.order[key] = shuffled(q.options.length);
+    var fb = inc.fb && inc.fb.q === key ? inc.fb : null;
+    var h = '<fieldset class="inc-q"><legend>' + q.prompt + '</legend><div class="inc-opts">' +
+      inc.order[key].map(function (i) {
+        var o = q.options[i];
+        return '<button type="button" class="inc-opt" data-act="inc-choice" data-q="' + key + '" data-v="' + o.v + '">' + UI.esc(o.label) + '</button>';
+      }).join('') + '</div></fieldset>';
+    if (fb) {
+      h += '<div class="inc-fb" role="status"><p><strong>' + (fb.correct ? 'Correct answer.' : 'Not safe — try again.') + '</strong> ' + UI.esc(fb.text) + '</p>' +
+        (fb.correct ? '<button type="button" class="inc-opt inc-next" data-act="inc-next" data-q="' + key + '">Continue</button>' : '') + '</div>';
+    }
+    return h;
+  }
+
   /** Overlay rendered on top of the station view while an incident is active. */
   Incident.overlay = function () {
     var inc = L.S.incident;
@@ -46,32 +110,23 @@
         [[60, 60, 20], [90, 72, -30], [120, 58, 50], [150, 70, 10], [100, 50, 80], [140, 52, -60], [75, 48, 35]].map(function (p, i) {
           return '<polygon class="shard" style="animation-delay:' + (i * 40) + 'ms" points="' + p[0] + ',' + p[1] + ' ' + (p[0] + 16) + ',' + (p[1] - 10) + ' ' + (p[0] + 7) + ',' + (p[1] + 13) + '" fill="#dbe9f3" stroke="#5c7184" transform="rotate(' + p[2] + ' ' + p[0] + ' ' + p[1] + ')"/>';
         }).join('')) +
-      (inc.stage === 'broken' || inc.stage === 'reported' ? '<text x="110" y="20" text-anchor="middle" font-size="12" fill="#b03a2e" font-weight="700">⚠ BROKEN GLASS — KEEP CLEAR</text>' : '') +
       '</svg>';
 
     var html = '<div class="incident-overlay stage-' + inc.stage + '" role="alertdialog" aria-label="Broken glassware incident"><div class="incident-card">';
     if (inc.stage === 'broken') {
-      html += '<h2>💥 Safety incident — broken glassware</h2>' + shards +
+      html += '<h2>💥 Broken glassware</h2>' + shards +
         '<p><strong>' + (CAUSE[inc.cause] || 'A test tube broke.') + '</strong> Your experiment is paused.</p>' +
-        '<ul class="inc-rules"><li>Stop what you are doing.</li><li>Do not pick up the glass or clean the spill.</li><li>Do not hide it.</li><li>Keep away from the area.</li><li>Report it to a laboratory TA and wait for instructions.</li></ul>' +
-        '<div class="inc-btns"><button class="btn primary big" data-act="inc-report">📣 Report to Lab TA</button>' +
-        '<button class="btn" data-act="inc-pickup">Pick up the broken glass</button>' +
-        '<button class="btn" data-act="inc-hide">Sweep the pieces under the bench</button>' +
-        '<button class="btn" data-act="inc-continue">Carry on working here</button></div>';
+        questionHTML(inc, 'report');
     } else if (inc.stage === 'reported') {
       html += '<h2>👩‍🔬 Lab TA</h2>' + shards +
-        '<blockquote>“Thank you for reporting it straight away — that\'s exactly right. Don\'t touch anything. Please step back from the bench and keep clear of the area. The technician will clean it up with a brush and dustpan, dispose of the glass in the broken-glass bin and disinfect the urine spill.”</blockquote>' +
-        '<div class="inc-btns"><button class="btn primary big" data-act="inc-stepback">↩ Step back and keep clear</button>' +
-        '<button class="btn" data-act="inc-pickup">Pick up the large pieces to help</button>' +
-        '<button class="btn" data-act="inc-continue">Carry on working at the bench</button></div>';
+        '<blockquote>“Thank you for telling me. I\'ve noted the incident and the technician is on the way with a brush, dustpan and the broken-glass bin.”</blockquote>' +
+        questionHTML(inc, 'clear');
     } else if (inc.stage === 'waiting') {
       var pct = Math.min(100, Math.round(100 * (Date.now() - inc.waitStart) / CLEAN_MS));
       html += '<h2>🧹 Authorised cleanup in progress</h2>' +
         '<div class="cleaning"><span class="tech">🧑‍🔧</span><span class="broom">🧹</span></div>' +
-        '<p>The technician is removing the glass and disinfecting the spill. Stay clear and wait for clearance.</p>' +
-        '<div class="meter"><div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
-        '<div class="inc-btns"><button class="btn" disabled>⏳ Waiting for clearance…</button>' +
-        '<button class="btn" data-act="inc-continue">Start working again now</button></div>';
+        '<p>The technician is removing the glass and disinfecting the spill. You are standing clear and waiting for clearance.</p>' +
+        '<div class="meter"><div class="bar"><i style="width:' + pct + '%"></i></div></div>';
     } else if (inc.stage === 'cleared') {
       html += '<h2>✅ Area cleared</h2>' +
         '<blockquote>“The area is clean and safe. ' + (inc.phaseAtBreak === 'cleanup' ? 'The broken tube has been disposed of — continue with the rest of the cleanup.' : 'Collect a fresh test tube from the rack and start this experiment again from the beginning.') + ' Well done for reporting it.”</blockquote>' +
@@ -80,43 +135,42 @@
     return html + '</div></div>';
   };
 
-  function wrong(kind) {
+  function choose(key, v) {
     var inc = L.S.incident;
-    inc.rec.wrong.push(kind);
-    var V = {
-      pickup: { id: 'glass-pickup', rule: 'broken_touch', title: 'Picking up broken glass — stop!',
-        action: 'You tried to pick up the broken glass yourself.',
-        consequence: 'Glass fragments cut through gloves easily, and the cut is contaminated with urine — a route for infection. Only authorised staff with a brush, dustpan and sharps/glass bin clean breakages.',
-        fix: inc.stage === 'broken' ? 'Leave the glass where it is and report to the Lab TA.' : 'Step back and let the technician clean it.' },
-      hide: { id: 'glass-hide', rule: 'broken_conceal', title: 'Concealing a breakage',
-        action: 'You tried to sweep the broken glass under the bench to hide it.',
-        consequence: 'Hidden glass and urine remain a hazard for the next class and the cleaning staff, and the spill is never disinfected. Concealing an incident is a serious breach of laboratory rules.',
-        fix: 'Report the breakage to the Lab TA now.' },
-      'continue': { id: 'glass-continue', rule: 'broken_conceal', title: 'Working in the affected area',
-        action: 'You tried to continue working next to the broken glass' + (inc.stage === 'broken' ? ' without reporting it.' : ' before the area was cleared.'),
-        consequence: 'Leaning on or kneeling near the bench exposes you to cuts, and you may spread the contaminated spill. The area must be cleared before anyone works there.',
-        fix: inc.stage === 'broken' ? 'Stop, keep clear and report to the Lab TA.' : 'Keep clear and wait for the TA\'s clearance.' }
-    }[kind];
-    V.cat = 'breakage'; V.severity = 'critical';
-    L.Safety.flag(V);
+    var expected = key === 'report' ? 'broken' : 'reported';
+    if (inc.stage !== expected) return;
+    var o = QUESTIONS[key].options.filter(function (x) { return x.v === v; })[0];
+    if (!o) return;
+    if (o.correct) {
+      inc.fb = { q: key, correct: true, text: o.fb };
+      if (key === 'report') {
+        inc.rec.reported = true;
+        L.Score.good('report-' + inc.rec.at, 'Reported the broken glassware to the TA immediately', 'breakage', 3);
+      } else {
+        L.Score.good('stepback-' + inc.rec.at, 'Kept clear of the affected area until cleared', 'breakage', 1);
+      }
+      return;
+    }
+    inc.rec.wrong.push(v);
+    var e = L.Score.violation({
+      id: o.v2.id, rule: o.v2.rule, cat: 'breakage', severity: 'critical', title: o.v2.title,
+      action: 'You chose: “' + o.label + '”', consequence: o.v2.consequence
+    });
+    inc.fb = { q: key, correct: false, text: o.v2.consequence + (e ? ' (−' + e.pts + ' safety points)' : '') };
   }
 
-  Incident.act = function (name) {
+  Incident.act = function (name, el) {
     var inc = L.S.incident;
     if (!inc) return;
     switch (name) {
-      case 'inc-report':
-        if (inc.stage !== 'broken') return;
-        inc.stage = 'reported'; inc.rec.reported = true;
-        L.Score.good('report-' + inc.rec.at, 'Reported the broken glassware to the TA immediately', 'breakage', 3);
+      case 'inc-choice':
+        choose(el.dataset.q, el.dataset.v);
         break;
-      case 'inc-stepback':
-        inc.stage = 'waiting'; inc.waitStart = Date.now();
-        L.Score.good('stepback-' + inc.rec.at, 'Kept clear of the affected area', 'breakage', 1);
+      case 'inc-next':
+        if (!inc.fb || !inc.fb.correct) return;
+        if (inc.fb.q === 'report' && inc.stage === 'broken') { inc.stage = 'reported'; inc.fb = null; }
+        else if (inc.fb.q === 'clear' && inc.stage === 'reported') { inc.stage = 'waiting'; inc.waitStart = Date.now(); inc.fb = null; }
         break;
-      case 'inc-pickup': return wrong('pickup');
-      case 'inc-hide': return wrong('hide');
-      case 'inc-continue': return wrong('continue');
       case 'inc-resume':
         if (inc.stage !== 'cleared') return;
         var exp = L.exp(inc.expId);

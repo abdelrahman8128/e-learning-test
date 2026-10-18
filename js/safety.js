@@ -69,7 +69,6 @@
 
   var GOGGLE_REASONS = {
     heating: 'Heated liquids can bump (boil suddenly) and eject hot liquid toward your face. Eyes cannot be protected by reflexes alone.',
-    acid: 'Even dilute acid can cause painful chemical injury to the cornea if a drop splashes from the dropper or tube.',
     hazard: 'Ammonium hydroxide releases irritating ammonia gas and is corrosive — a splash or vapour can seriously damage the eyes.'
   };
 
@@ -103,7 +102,7 @@
           title: 'Walking away from broken glass',
           action: 'You tried to walk away from the broken test tube without reporting it.',
           consequence: 'The next person could be cut by the glass or contaminated by the spilled urine. Leaving the scene is treated the same as concealing the incident.',
-          fix: 'Stay where you are and press "Report to Lab TA".'
+          fix: 'Stay where you are and answer the incident question on your workstation.'
         });
       }
       if (S.incident.stage !== 'cleared') {

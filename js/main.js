@@ -280,7 +280,7 @@
     var a = e.target.closest('[data-act]');
     if (!a || a.disabled) return;
     var n = a.dataset.act;
-    if (n.indexOf('inc-') === 0) L.Incident.act(n);
+    if (n.indexOf('inc-') === 0) L.Incident.act(n, a);
     else if (n.indexOf('c-') === 0) L.Cleanup.act(n, a);
     else if (GLOBAL[n]) GLOBAL[n](a);
     else L.Exp.act(n, a);

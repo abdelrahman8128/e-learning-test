@@ -37,7 +37,7 @@
     var exps = S.exps.map(function (e) {
       var d = L.expDef(e.id);
       var expected = {
-        albumin: sc.albumin ? 'Acid-resistant turbidity — albumin possibly present' : (sc.phosphates ? 'Turbidity cleared with acid (phosphates) — albumin not detected' : 'No turbidity — albumin not detected'),
+        albumin: sc.albumin ? 'Protein coagulation — albumin possibly present' : 'No coagulation — albumin not detected',
         benedict: L.BENEDICT_COLOURS[sc.glucose].name + ' — ' + L.BENEDICT_COLOURS[sc.glucose].meaning.toLowerCase(),
         rothera: sc.ketones ? 'Purple ring — ketone bodies present' : 'No ring — ketone bodies not detected',
         hay: sc.bile ? 'Sulfur sank — bile salts possibly present' : 'Sulfur floated — bile salts not detected'

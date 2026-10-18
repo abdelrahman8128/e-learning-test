@@ -82,11 +82,9 @@
     if (exp.id === 'albumin') {
       var u = c.urine || 0;
       if (u) v.layers.push({ from: 0, to: u, color: URINE });
-      if (t.heatedOnce && t.turbidOnHeat) {
-        var acidDone = (c.acetic || 0) >= 1;
-        var show = s.albumin || !acidDone;
-        if (show) v.turbid = { from: u * 0.45, to: u, op: s.albumin ? 0.88 : 0.6 };
-      }
+      // Protein coagulation: albumin denatures and forms white masses in the heated upper part
+      var amt = Exp.coagAmount(exp);
+      if (u && amt > 0) v.coag = { from: u * 0.42, to: u, amt: amt };
     } else if (exp.id === 'benedict') {
       var ur = c.urine || 0, bn = c.benedict || 0;
       if (ur && !bn) v.layers.push({ from: 0, to: ur, color: URINE });
@@ -128,6 +126,12 @@
     return v;
   };
 
+  /** 0–1: how far protein coagulation has developed (albumin-positive samples only). */
+  Exp.coagAmount = function (exp) {
+    if (exp.id !== 'albumin' || !sc().albumin || !exp.tube.contents.urine) return 0;
+    return Math.max(0, Math.min(1, (Math.min(exp.tube.heat, 100) - 55) / 45));
+  };
+
   /** Has a time-based observation finished developing? */
   Exp.ready = function (exp) {
     var t = exp.tube, now = Date.now();
@@ -143,7 +147,6 @@
     var r = L.REAGENTS[id], icon, label;
     if (id === 'holder') { icon = UI.icon.holder(); label = 'Test tube holder'; }
     else if (id === 'sample') { icon = UI.icon.cup(); label = 'Urine sample'; }
-    else if (id === 'acetic') { icon = UI.icon.dropper(); label = r.label; }
     else if (r.kind === 'powder') { icon = UI.icon.jar(r.color); label = r.label; }
     else { icon = UI.icon.bottle(r.color, true); label = r.label; }
     return '<div class="tile' + (extra || '') + '" data-drag="' + id + '" data-label="' + UI.esc(label) + '" tabindex="0" role="button">' +
@@ -157,7 +160,6 @@
     if (c.urine) bits.push(c.urine + ' mL urine');
     if (c.fill) bits.push('urine to ' + { quarter: '¼', half: '½', twothirds: '⅔', full: 'the brim' }[c.fill]);
     if (c.benedict) bits.push(c.benedict + ' mL Benedict\'s');
-    if (c.acetic) bits.push(c.acetic + ' drop(s) acetic acid');
     if (c.rothera) bits.push('Rothera\'s reagent');
     if (c.ammonia) bits.push(c.ammonia + ' mL NH₄OH layer');
     if (c.sulfur) bits.push('sulfur powder');
@@ -244,7 +246,6 @@
     if (t.loc !== 'holder' && d.hasBurner) actions.push('<button class="btn" data-act="holder">🗜 Attach holder</button>');
     if (t.loc !== 'rack') actions.push('<button class="btn" data-act="to-rack">⬇ Stand tube in rack</button>');
     if (d.hasBurner) actions.push('<button class="btn" data-act="heat">🔥 Heat at burner</button>');
-    if (exp.id === 'albumin') actions.push('<button class="btn" data-act="add" data-v="acetic">💧 Use acetic acid dropper</button>');
     actions.push('<button class="btn" data-act="wait">⏳ Wait</button>');
     actions.push('<button class="btn primary" data-act="observe"' + (waiting ? ' disabled' : '') + '>👁 Observe & record result</button>');
 
@@ -416,7 +417,7 @@
     }
     t.loc = 'rack';
     UI.toast('Tube stood upright in the rack.' + (t.temp >= 45 ? ' It is hot — leave it to cool.' : ''), 'good');
-    if (exp.id === 'albumin' && isDone(exp, 'acid')) done(exp, 'rack');
+    if (exp.id === 'albumin' && isDone(exp, 'heat')) done(exp, 'rack');
   }
 
   function toBurner(exp) {
@@ -456,7 +457,7 @@
     };
 
     if (exp.id === 'albumin') {
-      if (isDone(exp, 'heat')) return shakeAfter('the heat/acid reaction', 'Shaking hot liquid can splash it out of the tube, and it disperses the coagulum so you cannot compare the heated upper part with the unheated lower part.');
+      if (isDone(exp, 'heat')) return shakeAfter('heating (the coagulation reaction)', 'Shaking hot liquid can splash it out of the tube, and it breaks up and disperses the coagulated protein so you cannot compare the heated upper part with the unheated lower part.');
       UI.toast('Mixing is not part of the heat test protocol.', 'info');
       return;
     }
@@ -526,7 +527,7 @@
   var BAD = {
     smell: { id: 'smell', rule: 'no_smell', cat: 'conduct', severity: 'major', title: 'Sample smelled directly',
       action: 'You put your nose over the tube to smell the sample directly.',
-      consequence: 'Inhaling directly from a tube exposes you to infectious aerosols and to irritant vapours (e.g. ammonia, acetic acid). Odour is never used as an identification method in this practical.',
+      consequence: 'Inhaling directly from a tube exposes you to infectious aerosols and to irritant vapours (e.g. ammonia). Odour is never used as an identification method in this practical.',
       fix: 'Never smell chemicals or samples. Rely on the reaction you observe.' },
     phone: { id: 'phone', rule: 'belongings', cat: 'conduct', severity: 'minor', title: 'Personal item on the bench',
       action: 'You put your phone on the laboratory bench.',
@@ -551,12 +552,12 @@
   /* Reagents                                                            */
   /* ------------------------------------------------------------------ */
   var WRONG_WHY = {
-    albumin: 'The heat test needs only urine, heat and 1% acetic acid.',
+    albumin: 'The heat test needs only urine and heat — no reagent is added.',
     benedict: 'Benedict\'s test uses only urine and Benedict\'s reagent.',
     rothera: 'Rothera\'s test uses Rothera\'s reagent and ammonium hydroxide.',
     hay: 'Hay\'s test uses only urine and sulfur powder.'
   };
-  var USED_IN = { acetic: 'the heat test for albumin (Exp. 1)', benedict: 'the test for reducing sugars (Exp. 2)', rothera: 'the test for ketone bodies (Exp. 3)', ammonia: 'the layering step of Rothera\'s test (Exp. 3)', sulfur: 'Hay\'s test for bile salts (Exp. 4)' };
+  var USED_IN = { benedict: 'the test for reducing sugars (Exp. 2)', rothera: 'the test for ketone bodies (Exp. 3)', ammonia: 'the layering step of Rothera\'s test (Exp. 3)', sulfur: 'Hay\'s test for bile salts (Exp. 4)' };
 
   function wrongQty(exp, id, what, given, wanted, why) {
     Safety.tech({
@@ -596,7 +597,7 @@
     REAGENT_HANDLERS[exp.id](exp, rid, t, c);
   }
 
-  var CORRECT = { albumin: ['sample', 'acetic'], benedict: ['sample', 'benedict'], rothera: ['sample', 'rothera', 'ammonia'], hay: ['sample', 'sulfur'] };
+  var CORRECT = { albumin: ['sample'], benedict: ['sample', 'benedict'], rothera: ['sample', 'rothera', 'ammonia'], hay: ['sample', 'sulfur'] };
   function isCorrectForExp(exp, rid) { return CORRECT[exp.id].indexOf(rid) !== -1; }
 
   var REAGENT_HANDLERS = {
@@ -619,12 +620,6 @@
             L.requestRender();
           }
         });
-      }
-      if (rid === 'acetic') {
-        if (!Safety.requireGoggles('handle 1% acetic acid', 'acid')) return;
-        if (!seq(exp, ['heat'], 'add acetic acid', 'In this protocol the acid is added after heating: it dissolves any turbidity caused by phosphates or carbonates, so that only coagulated protein remains turbid.')) return;
-        if (c.acetic) return UI.toast('Acetic acid has already been added.', 'info');
-        return dropperModal(exp);
       }
     },
 
@@ -820,42 +815,6 @@
     });
   }
 
-  function dropperModal(exp) {
-    var drops = 0;
-    UI.modal({
-      title: '1% acetic acid — dropper', cls: 'dropper-modal', dismiss: false,
-      body: '<p>Squeeze the bulb gently to release one drop at a time into the tube. Protocol: <strong>2 drops</strong>.</p>' +
-        '<div class="dropper-stage"><div class="dropper-big">' + UI.icon.dropper() + '<span class="drop"></span></div>' +
-        '<div class="mini-tube">' + UI.tubeSVG(Exp.visual(exp)) + '</div></div>' +
-        '<p class="drop-count">Drops added: <strong>0</strong></p>' +
-        '<button class="btn" id="squeeze">💧 Squeeze bulb (1 drop)</button>',
-      buttons: [{ label: 'Finished adding acid', cls: 'primary', onClick: function () {
-        if (!drops) { UI.toast('No acid added yet.', 'info'); return false; }
-        var t = exp.tube;
-        t.contents.acetic = drops; done(exp, 'acid');
-        if (t.loc === 'rack') done(exp, 'rack');
-        if (drops !== P.albumin.aceticDrops) {
-          wrongQty(exp, 'acetic', '1% acetic acid', drops + ' drop(s)', '2 drops',
-            drops < 2 ? 'Too little acid may not dissolve phosphate turbidity, which could be mistaken for protein.' : 'Excess acid can partially redissolve coagulated protein and weaken a true positive.');
-          // the acid cannot be removed — the result is still shown (controlled scenario)
-        } else {
-          L.Score.good('acetic', 'Added exactly 2 drops of acetic acid after heating', 'quantity');
-        }
-        var s = sc();
-        UI.toast(t.turbidOnHeat ? (s.albumin ? 'The turbidity persists after adding acid.' : 'The turbidity disappeared after adding acid.') : 'The tube remains clear after adding acid.', 'info', 5000);
-        if (t.loc !== 'rack') UI.toast('When the tube is safe to handle, stand it in the rack (still using the holder).', 'info');
-      } }],
-      onOpen: function (w) {
-        UI.$('#squeeze', w).addEventListener('click', function () {
-          drops++;
-          UI.$('.drop-count strong', w).textContent = drops;
-          var d = UI.$('.drop', w);
-          d.classList.remove('falling'); void d.offsetWidth; d.classList.add('falling');
-        });
-      }
-    });
-  }
-
   /* ------------------------------------------------------------------ */
   /* Fume hood controls                                                  */
   /* ------------------------------------------------------------------ */
@@ -888,7 +847,7 @@
     var t = exp.tube;
     if (badTubeState(exp)) return;
     if (exp.id === 'albumin') {
-      if (!seq(exp, ['sample', 'heat', 'acid'], 'record the result', 'The result is read after heating and adding acetic acid.')) return;
+      if (!seq(exp, ['sample', 'holder', 'ppe', 'heat'], 'record the result', 'The result is read after heating the urine — no reagent is added.')) return;
       if (t.loc !== 'rack') {
         return Safety.tech({ id: 'obs-rack-albumin', cat: 'handling', points: 2, title: 'Stand the tube in the rack first',
           action: 'You tried to inspect the result while still holding the tube.',
@@ -938,8 +897,21 @@
   /* ------------------------------------------------------------------ */
   /* Time-based updates (called by the global ticker)                    */
   /* ------------------------------------------------------------------ */
+  /** Heat test step 3: the PPE check passes once coat (buttoned), gloves and goggles are worn. */
+  Exp.syncPPE = function (exp) {
+    if (!exp || exp.id !== 'albumin' || exp.done || isDone(exp, 'ppe')) return false;
+    if (!isDone(exp, 'sample') || !isDone(exp, 'holder')) return false;
+    var p = S().ppe;
+    if (!(Safety.coatOK() && p.gloves && p.goggles)) return false;
+    done(exp, 'ppe');
+    L.Score.good('ppe-heat', 'PPE checked before heating: buttoned coat, gloves and goggles', 'ppe');
+    UI.toast('PPE check passed: fully buttoned coat, gloves and goggles. You may heat the tube.', 'good');
+    return true;
+  };
+
   Exp.tick = function (dt) {
     var changed = false;
+    if (S().phase === 'lab' && Exp.syncPPE(L.currentExp())) changed = true;
     S().exps.forEach(function (e) {
       var t = e.tube;
       if (Exp.Heating.isRunning(e)) return;
@@ -1071,7 +1043,10 @@
           fix: 'Close the heating station, attach the holder, then return.'
         });
       }
-      if (exp.id === 'albumin' && !seq(exp, ['sample'], 'heat the tube', 'There is no urine in the tube yet.')) return false;
+      if (exp.id === 'albumin') {
+        Exp.syncPPE(exp);
+        if (!seq(exp, ['sample', 'holder', 'ppe'], 'heat the tube', 'Urine must be in the tube, the tube secured in the holder and your PPE checked before heating.')) return false;
+      }
       if (exp.id === 'benedict' && !seq(exp, ['sample', 'benedict', 'mix'], 'heat the tube', 'The urine and Benedict\'s reagent must be mixed before heating so that the sugar reacts evenly with the copper reagent.')) return false;
     }
     if (!H.burner.lit) { msg('Light the burner first.'); return false; }
@@ -1208,9 +1183,9 @@
     if (t.spoiled) return;
     if (exp.id === 'albumin') {
       if (t.heat >= 100 && !isDone(exp, 'heat')) {
-        done(exp, 'heat'); t.heatedOnce = true; t.turbidOnHeat = s.albumin || s.phosphates;
+        done(exp, 'heat'); t.heatedOnce = true;
         L.Score.good('heated-albumin', 'Heated the urine to boiling safely', 'heating');
-        UI.toast(t.turbidOnHeat ? 'Observation: turbidity (cloudiness) appeared in the heated upper part.' : 'Observation: the heated part remained clear.', 'info', 5500);
+        UI.toast(s.albumin ? 'Observation: protein coagulation — white coagulated masses formed in the heated upper part.' : 'Observation: no coagulation — the heated part stayed clear, like the lower part.', 'info', 5500);
       } else if (closing && t.heat > 0 && t.heat < 100) {
         UI.toast('The urine did not reach boiling. Heat again until the upper part boils.', 'info');
       }
@@ -1247,14 +1222,24 @@
     if (liq) liq.setAttribute('fill', liquidColour(H.exp));
     var g = UI.$('#h-bub', H.el);
     if (g) g.style.display = t.temp >= 97 && H.running ? '' : 'none';
-    var tb = UI.$('#h-turb', H.el);
-    if (tb) tb.style.display = H.exp.id === 'albumin' && t.heat >= 90 && (sc().albumin || sc().phosphates) ? '' : 'none';
+    var cg = UI.$('#h-coag', H.el);
+    if (cg) cg.setAttribute('opacity', Exp.coagAmount(H.exp));
   }
 
   function liquidColour(exp) {
     var v = Exp.visual(exp);
     if (!v || !v.layers.length) return '#f1cf5b';
     return v.layers[v.layers.length - 1].color;
+  }
+
+  /** Coagulated protein clumps in the heated (upper) part of the tube, side view. */
+  function coagSide(liqLen) {
+    var g = '<g id="h-coag" opacity="0">';
+    for (var i = 0; i < 9; i++) {
+      var x = liqLen * (0.5 + 0.48 * ((i * 37) % 100) / 100), y = ((i * 53) % 14) - 7;
+      g += '<ellipse cx="' + x.toFixed(1) + '" cy="' + y + '" rx="' + (3 + (i % 3)) + '" ry="' + (2 + (i % 2)) + '" fill="#fbfaf3" stroke="#cfcab8" stroke-width=".6"/>';
+    }
+    return g + '</g>';
   }
 
   function draw() {
@@ -1288,7 +1273,7 @@
       '<g class="' + (H.moving ? 'osc' : '') + '"><g transform="translate(' + bx + ' ' + by + ') rotate(' + (-H.angle) + ')">' +
       '<clipPath id="h-clip"><rect x="0" y="-10" width="150" height="20" rx="10"/></clipPath>' +
       '<g clip-path="url(#h-clip)"><rect id="h-liq" x="-2" y="-12" width="' + liqLen + '" height="24" fill="' + liquidColour(H.exp) + '" opacity=".85"/>' +
-      '<rect id="h-turb" x="' + (liqLen * 0.45) + '" y="-12" width="' + (liqLen * 0.55) + '" height="24" fill="#fff" opacity=".7" style="display:none"/>' +
+      coagSide(liqLen) +
       '<g id="h-bub" style="display:none"><circle class="bubble" cx="10" cy="-3" r="2" fill="#fff"/><circle class="bubble" cx="22" cy="4" r="1.5" fill="#fff" style="animation-delay:.3s"/><circle class="bubble" cx="35" cy="-2" r="2.2" fill="#fff" style="animation-delay:.6s"/></g></g>' +
       '<rect x="0" y="-10" width="150" height="20" rx="10" fill="none" stroke="#55687a" stroke-width="2"/>' +
       '<line x1="150" y1="-13" x2="150" y2="13" stroke="#55687a" stroke-width="3"/>' +

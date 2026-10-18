@@ -322,6 +322,10 @@ body.is-dragging [data-drop] { outline: 2px dashed rgba(31, 111, 139, .35); outl
 .bubble { animation: rise 1s linear infinite; }
 @keyframes rise { 0% { transform: translateY(0); opacity: .9; } 100% { transform: translateY(-40px); opacity: 0; } }
 .fade-in { animation: fadeIn 1.5s ease-out; }
+/* heat test: coagulated protein masses form and drift gently */
+.coag .clump { animation: clumpIn 1.6s ease-out both, clumpDrift 3.2s ease-in-out 1.6s infinite alternate; transform-box: fill-box; transform-origin: center; }
+@keyframes clumpIn { from { opacity: 0; transform: scale(.3); } }
+@keyframes clumpDrift { to { transform: translate(1px, 1.5px); } }
 @keyframes fadeIn { from { opacity: 0; } }
 .settle { animation: fadeIn 2s ease-out; }
 .steam path { fill: none; stroke: #b9c4cc; stroke-width: 2; stroke-linecap: round; animation: steam 2s ease-in-out infinite; }
@@ -397,6 +401,20 @@ body.is-dragging [data-drop] { outline: 2px dashed rgba(31, 111, 139, .35); outl
 @keyframes shatter { from { transform: translateY(-30px) scale(.4); opacity: 0; } }
 .inc-rules { font-size: .88rem; margin: .4rem 0 .8rem; }
 .inc-btns { display: flex; flex-wrap: wrap; gap: .5rem; }
+/* incident decision options: identical, neutral styling — nothing hints at the answer */
+.inc-q { border: 0; padding: 0; margin: .6rem 0 0; }
+.inc-q legend { font-weight: 700; font-size: 1rem; margin-bottom: .5rem; padding: 0; }
+.inc-opts { display: flex; flex-direction: column; gap: .5rem; }
+.inc-opt {
+  font: inherit; font-size: .95rem; font-weight: 400; color: var(--ink); text-align: left;
+  background: #fff; border: 1px solid #b9c5cf; border-radius: 8px; padding: .65rem .9rem;
+  cursor: pointer; min-height: 44px; box-shadow: none;
+}
+.inc-opt:hover { border-color: #8aa0b2; }
+.inc-opt:focus-visible { outline: 3px solid #f0b429; outline-offset: 2px; }
+.inc-fb { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; }
+.inc-fb p { margin: 0 0 .5rem; }
+.inc-next { display: inline-block; }
 .incident-card blockquote { margin: .5rem 0 .8rem; padding: .6rem .8rem; background: #f2f7fa; border-left: 4px solid var(--brand); border-radius: 0 8px 8px 0; }
 .cleaning { font-size: 2.6rem; text-align: center; }
 .cleaning .broom { display: inline-block; animation: sweep .6s ease-in-out infinite alternate; }
@@ -450,15 +468,6 @@ body.is-dragging [data-drop] { outline: 2px dashed rgba(31, 111, 139, .35); outl
 .vol-range { width: 100%; height: 32px; }
 .vol-btns { display: flex; gap: .5rem; margin: .4rem 0; }
 
-.dropper-stage { display: flex; align-items: flex-end; justify-content: center; gap: 1rem; height: 200px; position: relative; }
-.dropper-big .ico { width: 60px; height: 90px; }
-.dropper-big { position: relative; align-self: flex-start; }
-.dropper-big .drop { position: absolute; left: 50%; top: 86px; width: 8px; height: 10px; margin-left: -4px; background: #9fd0f0; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; opacity: 0; }
-.dropper-big .drop.falling { animation: dropFall .7s ease-in; }
-@keyframes dropFall { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(90px); } }
-.mini-tube .tube-svg { width: 40px; height: 160px; }
-.drop-count { text-align: center; font-size: 1.1rem; }
-#squeeze { display: block; margin: 0 auto; }
 
 /* heating modal */
 .heat-modal { max-width: 980px; }
@@ -490,7 +499,7 @@ body.is-dragging [data-drop] { outline: 2px dashed rgba(31, 111, 139, .35); outl
 /* quiz */
 .quiz-modal { max-width: 720px; }
 .obs-tube { float: right; margin: 0 0 .5rem 1rem; }
-.obs-tube .tube-svg { width: 46px; height: 184px; }
+.obs-tube .tube-svg { width: 60px; height: 240px; }
 .q { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 .7rem; padding: .5rem .8rem .6rem; }
 .q legend { font-weight: 600; padding: 0 .3rem; }
 .opt { display: flex; gap: .5rem; align-items: flex-start; padding: .35rem .2rem; cursor: pointer; border-radius: 6px; }

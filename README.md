@@ -24,7 +24,7 @@ to any static web server, such as GitHub Pages or a university LMS.
 3. **Four experiments, in order, each at its own workstation:**
    | # | Test | Station | Key mechanics |
    |---|------|---------|---------------|
-   | 1 | Heat test for albumin | Bench 1 | 5–6 mL urine, holder, safe heating, 2 drops 1 % acetic acid with an interactive dropper, phosphate vs. protein turbidity |
+   | 1 | Heat test for albumin | Bench 1 | 5–6 mL urine, holder, PPE check, safe heating (no reagent added); a positive sample shows visible **protein coagulation** (white coagulated masses) in the heated part |
    | 2 | Benedict's test | Bench 2 | 3 mL urine + 2 mL reagent, gentle mixing, 2-minute boil (simulated timer), cooling, colour/precipitate scale |
    | 3 | Rothera's test | Bench 3 → fume hood | 5 mL urine, ~1 g reagent, mix, carry the rack to the hood, fan on and sash lowered, layer 1–2 mL NH₄OH down the wall, purple ring, no shaking |
    | 4 | Hay's sulfur test | Bench 4 | fill ⅔, a small pinch of sulfur, no shaking, powder sinks or floats |
@@ -40,7 +40,7 @@ to any static web server, such as GitHub Pages or a university LMS.
 ### Safety rules that are enforced
 
 - Lab coat worn and fully buttoned. Gloves are required to handle samples and reagents.
-  Goggles are required for heating, acetic acid and ammonium hydroxide.
+  Goggles are required for heating and for ammonium hydroxide.
 - No food or drink, no personal items on benches, no crowding, no smelling, no playing with
   reagents, no moving chemicals unnecessarily. These are taught through decision prompts and
   "other actions".
@@ -54,7 +54,7 @@ to any static web server, such as GitHub Pages or a university LMS.
 - Fume hood for ammonium hydroxide, with the fan on and the sash at working height. The
   laminar flow cabinet is a distractor and is rejected.
 - No shaking after a reaction or after layering. Mixing is allowed only where the protocol needs it.
-- Broken glass: the experiment pauses. The student must *Report to Lab TA*, step back, wait
+- Broken glass: the experiment pauses and the student answers two questions ("What should you do next?", then "What do you do now?"). The options are identical white buttons in random order, so nothing reveals the answer; feedback is given as text. The correct answers are to report to a TA, then keep clear and wait
   for the authorised cleanup and get clearance. Picking up glass, hiding it, walking away or
   continuing to work are critical violations.
 
@@ -100,8 +100,8 @@ tests/e2e.js        headless browser test of every required scenario
 ### Adapting it to your practical manual
 
 - **Quantities.** Edit `Lab.PROTOCOL` in `js/data.js`. Examples are the urine volumes, the number
-  of acetic acid drops, the Rothera's reagent amount, the ammonium hydroxide volume and the boiling time.
-- **Cases.** Add or edit entries in `Lab.SCENARIOS`. Each case sets `albumin`, `phosphates`,
+  the Rothera's reagent amount, the ammonium hydroxide volume and the boiling time.
+- **Cases.** Add or edit entries in `Lab.SCENARIOS`. Each case sets `albumin`,
   `glucose` (0–4), `ketones` and `bile`.
 - **Rules text.** Edit `Lab.RULES`. Every warning and the report refer to these rule IDs.
 

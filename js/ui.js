@@ -274,7 +274,7 @@
   UI.tubeY = Y;
 
   /**
-   * v = { layers:[{from,to,color,op}], turbid:{from,to,op}, ppt:{color,amt}, ring:{at,color,delay},
+   * v = { layers:[{from,to,color,op}], coag:{from,to,amt}, ppt:{color,amt}, ring:{at,color,delay},
    *       sulfur:{level, mode:'float'|'sink'|'scatter', amt, delay}, bubbles, hot, holder, steam, label }
    */
   UI.tubeSVG = function (v, o) {
@@ -293,12 +293,18 @@
       s += '<ellipse cx="30" cy="' + Y(l.to) + '" rx="19" ry="2" fill="' + l.color + '" opacity=".5"/>';
     });
 
-    if (v.turbid) {
-      var t0 = Y(v.turbid.to), t1 = Y(v.turbid.from);
-      s += '<g class="turbid' + (v.turbid.anim ? ' fade-in' : '') + '" opacity="' + v.turbid.op + '"><rect x="0" width="60" y="' + t0 + '" height="' + (t1 - t0) + '" fill="#fdfdf8"/>';
-      for (var i = 0; i < 26; i++) {
-        var px = 13 + ((i * 37) % 34), py = t0 + 3 + ((i * 53) % Math.max(4, (t1 - t0 - 6)));
-        s += '<circle cx="' + px + '" cy="' + py + '" r="1.1" fill="#ffffff"/>';
+    if (v.coag) {
+      // Protein coagulation: white, fluffy coagulated masses in the heated (upper) part
+      var c0 = Y(v.coag.to) + 3, c1 = Y(v.coag.from), band = Math.max(6, c1 - c0);
+      s += '<g class="coag" opacity="' + (0.35 + 0.65 * v.coag.amt).toFixed(2) + '">' +
+        '<rect x="0" width="60" y="' + c0 + '" height="' + band + '" fill="#f7f6ee" opacity="' + (0.35 * v.coag.amt).toFixed(2) + '"/>';
+      var n = Math.round(6 + v.coag.amt * 12);
+      for (var i = 0; i < n; i++) {
+        var cx = 15 + ((i * 41) % 30), cy = c0 + 4 + ((i * 67) % Math.max(4, band - 8));
+        var rx = 2.6 + (i % 4) * 0.9, ry = 1.8 + (i % 3) * 0.7;
+        s += '<g class="clump" style="animation-delay:' + (i * 90) + 'ms">' +
+          '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="#fdfcf6" stroke="#cdc8b4" stroke-width=".5"/>' +
+          '<ellipse cx="' + (cx + rx * 0.7) + '" cy="' + (cy - ry * 0.5) + '" rx="' + (rx * 0.6) + '" ry="' + (ry * 0.7) + '" fill="#ffffff" stroke="#d8d3c2" stroke-width=".4"/></g>';
       }
       s += '</g>';
     }
@@ -433,10 +439,6 @@
       return '<svg viewBox="0 0 40 56" class="ico"><path d="M8 14 H32 L29 52 H11Z" fill="#fff8e6" stroke="#8b6b2b" stroke-width="1.5"/>' +
         '<rect x="9.5" y="24" width="21" height="27" fill="#f1cf5b" opacity=".85"/><rect x="6" y="10" width="28" height="6" rx="2" fill="#d33"/>' +
         '<rect x="12" y="30" width="16" height="10" fill="#fff" stroke="#aaa"/></svg>';
-    },
-    dropper: function () {
-      return '<svg viewBox="0 0 40 56" class="ico"><ellipse cx="20" cy="9" rx="7" ry="8" fill="#d0463b"/><rect x="16" y="15" width="8" height="5" fill="#888"/>' +
-        '<path d="M16 20 H24 L21.5 52 H18.5Z" fill="#eef6fb" stroke="#6b7c8f"/><rect x="18" y="38" width="4" height="12" fill="#e8f1f8"/></svg>';
     },
     jar: function (c) {
       return '<svg viewBox="0 0 40 56" class="ico"><rect x="9" y="8" width="22" height="7" rx="2" fill="#666"/>' +

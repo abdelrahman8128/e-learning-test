@@ -153,10 +153,8 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
   await drag('[data-drag="benedict"]', '[data-drop="tube"]');
   ok(await hasTech('wrong-reagent-albumin-benedict'), 'wrong reagent flagged');
   await closeModals();
-  // acid before heating → sequence
-  await act('add', 'acetic');
-  ok(await hasTech('seq-albumin-heat'), 'acid before heating flagged as sequence error');
-  await closeModals();
+  // heat test uses heat only — no acetic acid anywhere
+  ok(!(await page.$('[data-drag="acetic"]')) && !/acetic/i.test(await page.innerText('body')), 'no acetic acid reagent, control or text');
 
   console.log('\nScenario 4 — heat without a holder, then without goggles');
   await drag('[data-drag="tube"]', '[data-drop="burner"]');
@@ -218,12 +216,12 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
   await wait(5600);
   await page.click('#h-stop'); await wait(100);
   await finishHeat();
-  ok((await S()).exps[0].steps.heat, 'heated to boiling');
-  await act('add', 'acetic');
-  await page.click('#squeeze'); await page.click('#squeeze');
-  await page.click('#modal-root .modal-foot .btn.primary'); await wait(150);
+  ok((await S()).exps[0].steps.ppe && (await S()).exps[0].steps.heat, 'PPE checked, heated to boiling');
+  ok((await page.$$('#station .tube-wrap .coag .clump')).length >= 6, 'positive sample: coagulated protein masses visible in the tube');
   await drag('[data-drag="tube"]', '[data-drop="rack"]');
   await act('observe');
+  const q1 = await page.innerText('#modal-root .quiz-modal');
+  ok(/Protein coagulation/.test(q1) && !/precipitat/i.test(q1), 'quiz uses "coagulation", never "precipitate"');
   await shot('s07-quiz1');
   await answerQuiz(true);
   ok((await S()).exps[0].done && (await S()).exps[0].quiz.correct === 3, 'Experiment 1 complete, 3/3');
@@ -306,13 +304,22 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
   console.log('\nScenario 11 — break a tube and report it to a TA');
   await drag('[data-drag="tube"]', null);
   ok((await S()).incident && (await S()).incident.stage === 'broken', 'incident started, experiment paused');
+  const optStyles = await page.$$eval('#station .inc-opt[data-act="inc-choice"]', els => els.map(e => {
+    const c = getComputedStyle(e);
+    return [c.backgroundColor, c.color, c.borderTopColor, c.borderTopWidth, c.fontSize, c.fontWeight, c.fontFamily, c.boxShadow, c.textAlign].join('|');
+  }));
+  ok(optStyles.length === 4, 'four response options shown');
+  ok(optStyles.every(x => x === optStyles[0]) && optStyles[0].startsWith('rgb(255, 255, 255)'), 'all options white and identically styled');
+  ok(!(await page.$('#station .incident-card .btn.primary')) && !(await page.$('#station .inc-fb')), 'no highlighted answer, no feedback before choosing');
   await shot('s11-broken');
   await goto('ta');
   ok(await hasViolation('leave-incident'), 'walking away without reporting = violation');
   await closeModals();
-  await act('inc-report');
-  ok((await S()).incident.stage === 'reported', 'TA acknowledged');
-  await act('inc-stepback');
+  await act('inc-choice', 'report');
+  ok(/Correct answer/.test(await page.innerText('#station .inc-fb')), 'text feedback explains the correct choice');
+  await act('inc-next');
+  ok((await S()).incident.stage === 'reported', 'TA acknowledged the report');
+  await act('inc-choice', 'wait'); await act('inc-next');
   await wait(5000);
   ok((await S()).incident.stage === 'cleared', 'area cleared after authorised cleanup');
   await act('inc-resume');
@@ -320,13 +327,15 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
 
   console.log('\nScenario 12 — break a tube and try to pick up the glass');
   await drag('[data-drag="tube"]', null);
-  await act('inc-pickup');
-  ok(await hasViolation('glass-pickup'), 'critical warning for picking up glass');
-  await closeModals();
-  await act('inc-hide');
-  ok(await hasViolation('glass-hide'), 'critical warning for hiding glass');
-  await closeModals();
-  await act('inc-report'); await act('inc-stepback'); await wait(5000); await act('inc-resume');
+  await act('inc-choice', 'pickup');
+  ok(await hasViolation('glass-pickup'), 'critical violation for picking up glass');
+  ok(/Not safe — try again/.test(await page.innerText('#station .inc-fb')) && (await S()).incident.stage === 'broken', 'risk explained, student can try again');
+  await act('inc-choice', 'clean');
+  ok(await hasViolation('glass-hide'), 'critical violation for cleaning without reporting');
+  await act('inc-choice', 'report'); await act('inc-next');
+  await act('inc-choice', 'help');
+  ok(await hasViolation('glass-help'), 'critical violation for handling glass after reporting');
+  await act('inc-choice', 'wait'); await act('inc-next'); await wait(5000); await act('inc-resume');
 
   // finish Hay's
   await drag('[data-drag="sample"]', '[data-drop="tube"]'); await choose('two-thirds');

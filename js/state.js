@@ -8,13 +8,12 @@
     return {
       where: where,       // station the tube is at
       loc: 'rack',        // 'rack' | 'hand' | 'holder' | 'carry' (in carrying rack) | 'broken'
-      contents: {},       // urine (mL), benedict (mL), acetic (drops), rothera, ammonia (mL), sulfur
+      contents: {},       // urine (mL), benedict (mL), rothera, ammonia (mL), sulfur, fill
       mixed: false,
       heat: 0,            // % towards boiling (100 = boiling)
       boil: 0,            // simulated seconds of boiling
       temp: 22,           // °C
       heatedOnce: false,
-      turbidOnHeat: false,
       layered: false, layeredAt: 0, layerMethod: null,
       disturbed: false,   // layers mixed / sulfur disturbed — must reset
       sulfurAt: 0, sulfurAmt: null,

@@ -108,7 +108,7 @@
     var h = '<div class="panel tech-view"><div class="person">🧑‍🔧</div><h2>Laboratory technician — equipment return</h2>';
     if (phase !== 'cleanup') return h + '<p>“Equipment for today\'s practical is already on your benches. Bring the rack and equipment back to me at the end of the session.”</p></div>';
     if (c.returned) return h + '<p>“All equipment received — thank you. Make sure the benches are clean and the pathways are clear before you sign out.”</p></div>';
-    h += '<p>“Bring me your rack of clean tubes, the test tube holders and the droppers.”</p>' +
+    h += '<p>“Bring me your rack of clean tubes, the test tube holders and the pipettes.”</p>' +
       '<div class="zone tech-drop" data-drop="technician">' + UI.icon.rack(carried().length) + '<span>Hand over here</span></div>' +
       '<button class="btn primary" data-act="c-return">↩ Return rack & equipment</button>';
     return h + '</div>';
@@ -166,7 +166,7 @@
     c.returned = true;
     liveTubes().forEach(function (e) { e.tube.loc = 'returned'; e.tube.where = 'tech'; });
     L.Score.good('returned', 'Returned clean equipment to the technician', 'cleanup', 2);
-    UI.toast('Rack, holders and droppers returned to the technician.', 'good');
+    UI.toast('Rack, holders and pipettes returned to the technician.', 'good');
   }
 
   Cleanup.act = function (name, el) {

@@ -15,32 +15,29 @@
   Quiz.build = function (expId) {
     var s = L.scenario();
     if (expId === 'albumin') {
-      var obs = s.albumin ? 'persist' : (s.phosphates ? 'cleared' : 'clear');
       return [
         { q: 'What did you observe in the heated upper part of the tube (compared with the unheated lower part)?',
           options: [
-            { v: 'clear', label: 'No turbidity — the heated part stayed clear' },
-            { v: 'persist', label: 'Turbidity appeared on heating and persisted after adding acetic acid' },
-            { v: 'cleared', label: 'Turbidity appeared on heating but disappeared after adding acetic acid' },
-            { v: 'red', label: 'The urine turned brick-red' }
-          ], correct: obs,
-          explain: obs === 'persist' ? 'Coagulated protein does not dissolve in dilute acetic acid, so the turbidity persisted.' :
-            obs === 'cleared' ? 'Phosphates/carbonates precipitate on heating but dissolve in dilute acetic acid — so the turbidity cleared.' :
-              'Nothing precipitated on heating and the tube remained clear after the acid.' },
+            { v: 'coag', label: 'Protein coagulation — white, cloudy coagulated masses formed on heating' },
+            { v: 'clear', label: 'No coagulation — the heated part stayed clear, like the lower part' },
+            { v: 'red', label: 'The urine turned brick-red' },
+            { v: 'ring', label: 'A purple ring formed at the top of the urine' }
+          ], correct: s.albumin ? 'coag' : 'clear',
+          explain: s.albumin ? 'Heat denatured the albumin, which coagulated into white masses in the heated part.' : 'No protein coagulated: the heated part looked the same as the unheated lower part.' },
         { q: 'What is your interpretation?',
           options: [
-            { v: 'pos', label: 'Albumin (protein) is possibly present — proteinuria' },
-            { v: 'neg', label: 'Albumin not detected (any turbidity that cleared with acid was due to phosphates)' },
+            { v: 'pos', label: 'Protein coagulation indicates the possible presence of albumin (proteinuria)' },
+            { v: 'neg', label: 'No coagulation — albumin was not detected' },
             { v: 'glu', label: 'Glucose is present in the urine' }
           ], correct: s.albumin ? 'pos' : 'neg',
-          explain: s.albumin ? 'Turbidity that persists after acetic acid indicates the possible presence of albumin.' : 'There was no acid-resistant turbidity, so albumin was not detected.' },
+          explain: s.albumin ? 'Visible protein coagulation on heating indicates the possible presence of albumin.' : 'Without coagulation, albumin was not detected by this test.' },
         { q: 'Which statement about the heat test is correct?',
           options: rotate([
             { v: 'qual', label: 'It is qualitative: it indicates whether albumin is present, not its concentration' },
-            { v: 'quant', label: 'The amount of turbidity gives the exact albumin concentration in g/L' },
-            { v: 'acidglu', label: 'The acetic acid is added to precipitate glucose' }
+            { v: 'quant', label: 'The amount of coagulation gives the exact albumin concentration in g/L' },
+            { v: 'reag', label: 'A reagent must be added before heating for coagulation to occur' }
           ], 1), correct: 'qual',
-          explain: 'The heat test is qualitative. Quantification needs a dedicated method (e.g. dipstick grading, urine protein:creatinine ratio).' }
+          explain: 'The heat test is qualitative and uses heat alone. Quantification needs a dedicated method (e.g. urine protein:creatinine ratio).' }
       ];
     }
     if (expId === 'benedict') {
