@@ -1,7 +1,8 @@
 /* =========================================================================
    cleanup.js — end-of-lab sequence: burners off, cool, collect tubes in a
-   rack, wash, rack, return equipment, clean benches, clear pathways,
-   remove gloves, wash hands. The session cannot finish until all are done.
+   rack, empty mixtures into the correct waste container, wash, rack,
+   return equipment, clean benches, clear pathways, remove gloves, wash
+   hands. The session cannot finish until all are done.
    ========================================================================= */
 (function (L) {
   'use strict';
@@ -19,7 +20,7 @@
       title: '🧽 All four tests complete — cleanup time',
       body: '<p>Before you can leave, complete the cleanup sequence. Your task list (left) tracks each item:</p><ol class="clean-list">' +
         Cleanup.tasks().map(function (t) { return '<li>' + t.text + '</li>'; }).join('') + '</ol>' +
-        '<p class="tiny">Hint: tubes go into the <strong>carrying rack</strong> — never carry them loose. The sink is the washing station; the technician takes the equipment back.</p>',
+        '<p class="tiny">Tubes go into the <strong>carrying rack</strong> — never carry them loose. Reaction mixtures go into the labelled containers at the <strong>waste station</strong>, not down the sink. The sink is for washing emptied tubes; the technician takes the equipment back.</p>',
       buttons: [{ label: 'Start cleanup', cls: 'primary' }]
     });
   };
@@ -30,12 +31,13 @@
       { id: 'burners', text: 'Turn off all Bunsen burners', done: !S().burners.bench1.lit && !S().burners.bench2.lit },
       { id: 'cool', text: 'Allow heated tubes to cool before handling', done: tubes.every(function (e) { return e.tube.temp < 40; }) },
       { id: 'collect', text: 'Collect every tube into the carrying rack (no loose tubes)', done: tubes.every(function (e) { return e.tube.loc === 'carry' || e.tube.loc === 'returned'; }) },
-      { id: 'wash', text: 'Wash each tube at the sink (empty, brush, rinse)', done: tubes.every(function (e) { return e.tube.washStage >= 3; }) },
+      { id: 'waste', text: 'Empty each reaction mixture into the correct waste container', done: tubes.every(function (e) { return e.tube.washStage >= 1; }) },
+      { id: 'wash', text: 'Wash each emptied tube at the sink (brush, rinse)', done: tubes.every(function (e) { return e.tube.washStage >= 3; }) },
       { id: 'rack', text: 'Stand the washed tubes inverted in the rack', done: tubes.every(function (e) { return e.tube.washStage >= 4; }) },
       { id: 'return', text: 'Return the rack and equipment to the technician', done: c.returned },
       { id: 'wipe', text: 'Clean all four benches and the fume hood', done: BENCHES.every(function (b) { return c.wiped[b]; }) },
       { id: 'path', text: 'Keep entrance & exit pathways clear', done: c.stool === 'stowed' },
-      { id: 'hands', text: 'Remove gloves and wash hands', done: c.glovesOff && c.handsWashed }
+      { id: 'hands', text: 'Finally, remove gloves and wash hands', done: !S().ppe.gloves && c.handsWashed }
     ];
   };
 
@@ -75,8 +77,9 @@
 
   function carried() { return S().exps.filter(function (e) { return e.tube.loc === 'carry'; }); }
 
+  // washStage: 0 = contains mixture · 1 = emptied at the waste station · 2 scrubbed · 3 rinsed · 4 drained
   var WASH = [
-    { label: 'Empty contents into the sink under running water' },
+    { label: 'Empty the reaction mixture into the correct waste container' },
     { label: 'Scrub with a test-tube brush and detergent' },
     { label: 'Rinse with tap water, then distilled water' },
     { label: 'Stand inverted in the drying rack to drain' }
@@ -93,13 +96,43 @@
     here.forEach(function (e) {
       var t = e.tube, d = L.expDef(e.id);
       h += '<div class="wash-row"><div class="tube-wrap static sm">' + UI.tubeSVG(L.Exp.visual(e)) + '</div><div class="wash-body"><strong>Tube from Experiment ' + d.num + '</strong> <span class="temp">' + Math.round(t.temp) + ' °C</span>' +
-        '<div class="wash-steps">' + WASH.map(function (w, i) {
-          return '<button class="btn sm ' + (t.washStage > i ? 'done' : '') + '" data-act="c-wash" data-v="' + e.id + '" data-i="' + i + '"' + (t.washStage > i ? ' disabled' : '') + '>' + (t.washStage > i ? '✔ ' : (i + 1) + '. ') + w.label + '</button>';
+        (t.washStage === 0 ? '<p class="tiny">Still contains the reaction mixture.</p>' : '<p class="tiny">Emptied at the waste station.</p>') +
+        '<div class="wash-steps">' +
+        (t.washStage === 0 ? '<button class="btn sm" data-act="c-sinkpour" data-v="' + e.id + '">Pour the contents down the sink</button>' : '') +
+        WASH.slice(1).map(function (w, k) {
+          var i = k + 1;
+          return '<button class="btn sm ' + (t.washStage > i ? 'done' : '') + '" data-act="c-wash" data-v="' + e.id + '" data-i="' + i + '"' + (t.washStage > i ? ' disabled' : '') + '>' + (t.washStage > i ? '✔ ' : '') + w.label + '</button>';
         }).join('') + '</div></div></div>';
     });
     h += '<div class="hand-wash"><h3>Personal hygiene (last)</h3>' +
-      '<button class="btn" data-act="c-gloves"' + (c.glovesOff ? ' disabled' : '') + '>' + (c.glovesOff ? '✔ Gloves removed' : '🧤 Remove gloves into the clinical waste bin') + '</button> ' +
+      '<button class="btn" data-act="c-gloves"' + (S().ppe.gloves ? '' : ' disabled') + '>' + (S().ppe.gloves ? '🧤 Remove gloves into the clinical waste bin' : '✔ Gloves removed') + '</button> ' +
       '<button class="btn" data-act="c-hands"' + (c.handsWashed ? ' disabled' : '') + '>' + (c.handsWashed ? '✔ Hands washed' : '🧼 Wash hands with soap and water') + '</button></div>';
+    return h + '</div>';
+  };
+
+  /** Chemical waste station: labelled containers; each mixture must go into the right one. */
+  Cleanup.wasteView = function () {
+    var W = L.WASTE, phase = S().phase;
+    var bins = '<div class="waste-bins">' + W.containers.map(function (c) {
+      return '<div class="waste-bin"><span class="big-ico">' + c.icon + '</span><strong>' + c.label + '</strong><small>' + c.sub + '</small></div>';
+    }).join('') + '</div>';
+    var h = '<div class="panel waste-view"><h2>🗑️ Chemical waste station</h2>' +
+      '<p>Reaction mixtures are never poured down the sink. Read the labels and empty each mixture into the container it belongs in.</p>' + bins;
+    if (phase !== 'cleanup') return h + '<p class="tiny">You will dispose of your reaction mixtures here during cleanup.</p></div>';
+    var here = carried().filter(function (e) { return e.tube.washStage === 0; });
+    var done = carried().filter(function (e) { return e.tube.washStage >= 1; });
+    if (!carried().length) h += '<p>Bring your used tubes here in the carrying rack.</p>';
+    here.forEach(function (e) {
+      var d = L.expDef(e.id);
+      h += '<div class="waste-row"><div class="tube-wrap static sm">' + UI.tubeSVG(L.Exp.visual(e)) + '</div><div class="wash-body">' +
+        '<strong>Tube from Experiment ' + d.num + ' — ' + d.title + '</strong><p class="tiny">Contains ' + W.describe[e.id] + '. Empty it into:</p>' +
+        '<div class="wash-steps">' + W.containers.map(function (c) {
+          return '<button class="btn sm" data-act="c-waste" data-v="' + e.id + '" data-w="' + c.id + '">' + c.icon + ' ' + c.label + '</button>';
+        }).join('') + '</div></div></div>';
+    });
+    done.forEach(function (e) {
+      h += '<p class="tiny">✔ Experiment ' + L.expDef(e.id).num + ' mixture disposed of. Take the empty tube to the sink to wash it.</p>';
+    });
     return h + '</div>';
   };
 
@@ -197,9 +230,41 @@
       L.Score.good('wipe-' + st, 'Cleaned ' + L.STATIONS[st].name, 'cleanup');
       return;
     }
+    if (name === 'c-sinkpour') {
+      var es = L.exp(el.dataset.v);
+      return Safety.flag({ id: 'sink-pour-' + es.id, rule: 'waste', cat: 'waste', severity: 'major', title: 'Reaction mixture poured toward the sink — stopped',
+        action: 'You tried to pour the ' + L.WASTE.describe[es.id] + ' down the sink.',
+        consequence: L.WASTE.why[es.id] + ' Chemical and biological waste poured into drains contaminates water and can react with other residues in the pipes.',
+        fix: 'Carry the tube in the rack to the chemical waste station and choose the correct container.' });
+    }
+    if (name === 'c-waste') {
+      var ew = L.exp(el.dataset.v), tw = ew.tube, choice = el.dataset.w;
+      if (S().station !== 'waste' || tw.loc !== 'carry' || tw.washStage !== 0) return;
+      if (!Safety.requireGloves('empty a reaction mixture into the waste')) return;
+      if (tw.temp >= 45) { UI.toast('The tube is still hot — let it cool before handling it.', 'warn'); return; }
+      var right = L.WASTE.route[ew.id];
+      var cont = L.WASTE.containers.filter(function (c) { return c.id === choice; })[0];
+      if (choice !== right) {
+        return Safety.tech({ id: 'waste-wrong-' + ew.id + '-' + choice, cat: 'waste', points: 3, rule: 'waste', modal: true,
+          title: 'Wrong waste container',
+          action: 'You tried to empty the ' + L.WASTE.describe[ew.id] + ' into the “' + cont.label + '” container.',
+          consequence: 'Waste is segregated so that incompatible materials are never mixed and each stream is treated correctly. ' + L.WASTE.why[ew.id],
+          fix: 'Read the container labels again and choose the correct one for this mixture.' });
+      }
+      tw.washStage = 1; tw.contents = {}; tw.wasteIn = choice;
+      L.Score.good('waste-' + ew.id, 'Disposed of the Experiment ' + L.expDef(ew.id).num + ' mixture in the correct waste container', 'waste', 1);
+      UI.toast('Emptied into “' + cont.label + '”. ' + L.WASTE.why[ew.id], 'good', 5000);
+      return;
+    }
     if (name === 'c-wash') {
       var e2 = L.exp(el.dataset.v), i = +el.dataset.i, t = e2.tube;
       if (!Safety.requireGloves('wash used test tubes')) return;
+      if (t.washStage === 0) {
+        return Safety.tech({ id: 'wash-before-waste', cat: 'waste', points: 1, rule: 'waste', title: 'Tube still contains the reaction mixture',
+          action: 'You tried to wash a tube that still contains its reaction mixture.',
+          consequence: 'The mixture must first go into the correct container at the chemical waste station — washing it out would send it down the drain.',
+          fix: 'Take the tube to the chemical waste station first.' });
+      }
       if (t.temp >= 45) {
         L.Score.violation({ id: 'thermal-shock', rule: 'hot_glass', cat: 'cleanup', severity: 'minor', title: 'Cold water on hot glass',
           action: 'You ran cold water into a tube that was still hot.', consequence: 'Sudden cooling cracks glass (thermal shock).' });
@@ -212,17 +277,17 @@
           fix: 'Follow the washing steps in order.' });
       }
       t.washStage++;
-      if (t.washStage === 1) t.contents = {};
       if (t.washStage === 4) L.Score.good('washed-' + e2.id, 'Washed a test tube following the protocol', 'cleanup');
       return;
     }
     if (name === 'c-gloves') {
+      if (!S().ppe.gloves) return;
       var pending = Cleanup.tasks().filter(function (t) { return !t.done && t.id !== 'hands' && t.id !== 'path'; });
-      var doIt = function () { c.glovesOff = true; S().ppe.gloves = false; UI.toast('Gloves removed by peeling them inside-out into the clinical waste bin.', 'good'); L.requestRender(); };
+      var doIt = function () { L.Gloves.discard(); };
       if (pending.length) {
-        UI.modal({ title: 'Remove gloves now?', body: '<p>You still have cleanup tasks that involve handling used glassware or disinfectant:</p><ul>' +
-          pending.map(function (p) { return '<li>' + p.text + '</li>'; }).join('') + '</ul><p>Gloves should be removed as the <strong>last</strong> step.</p>',
-          buttons: [{ label: 'Keep gloves on', cls: 'primary' }, { label: 'Remove anyway', onClick: doIt }] });
+        UI.modal({ title: 'Remove gloves now?', body: '<p>You still have cleanup tasks that involve handling used glassware, waste or disinfectant:</p><ul>' +
+          pending.map(function (p) { return '<li>' + p.text + '</li>'; }).join('') + '</ul><p>If you remove them now, you will need a fresh pair from the PPE station to continue.</p>',
+          buttons: [{ label: 'Keep gloves on' }, { label: 'Remove and discard them', onClick: doIt }] });
         return;
       }
       doIt();

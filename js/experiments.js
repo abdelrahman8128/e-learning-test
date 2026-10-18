@@ -241,7 +241,7 @@
 
     var actions = [];
     actions.push('<button class="btn" data-act="mix-gentle">🔄 Mix gently</button>');
-    actions.push('<button class="btn warn-outline" data-act="shake">↕ Shake vigorously</button>');
+    actions.push('<button class="btn" data-act="shake">↕ Shake vigorously</button>');
     if (t.loc !== 'hand') actions.push('<button class="btn" data-act="pickup">✋ Pick up tube by hand</button>');
     if (t.loc !== 'holder' && d.hasBurner) actions.push('<button class="btn" data-act="holder">🗜 Attach holder</button>');
     if (t.loc !== 'rack') actions.push('<button class="btn" data-act="to-rack">⬇ Stand tube in rack</button>');

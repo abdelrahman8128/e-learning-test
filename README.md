@@ -29,10 +29,16 @@ to any static web server, such as GitHub Pages or a university LMS.
    | 3 | Rothera's test | Bench 3 → fume hood | 5 mL urine, ~1 g reagent, mix, carry the rack to the hood, fan on and sash lowered, layer 1–2 mL NH₄OH down the wall, purple ring, no shaking |
    | 4 | Hay's sulfur test | Bench 4 | fill ⅔, a small pinch of sulfur, no shaking, powder sinks or floats |
 4. **Interpretation.** Three questions per test (observation, interpretation, principle), with feedback.
-5. **Cleanup.** Burners off, let tubes cool, collect tubes in a carrying rack, wash at the sink
-   (empty → brush → rinse → drain), return the rack to the technician, wipe all benches and the
-   hood, clear the stool from the exit aisle, remove gloves and wash hands. The session cannot
-   finish until every cleanup step is done.
+5. **Cleanup.** Burners off, let tubes cool, collect tubes in a carrying rack, empty each
+   reaction mixture into the correct labelled container at the **chemical waste station**
+   (pouring into the sink is blocked; a wrong container is explained and refused), wash the emptied
+   tubes at the sink (brush → rinse → drain), return the rack to the technician, wipe all benches
+   and the hood, clear the stool from the exit aisle, then remove gloves and wash hands. The
+   session cannot finish until every cleanup step is done.
+
+**Gloves.** Removing gloves ("Remove & discard" in the PPE panel, or at the sink) puts the used
+pair in the clinical waste bin: it can never be re-worn. Fresh pairs come from the glove box at
+the **PPE station** on the floor plan, at any time, so a student is never locked out.
 6. **End-of-lab report.** Shows the final score, safety, procedure and interpretation scores,
    scores by category, the errors made, the safety rules to revise, the breakage response and
    a completion status. It can be printed or saved as PDF.
@@ -103,6 +109,10 @@ tests/e2e.js        headless browser test of every required scenario
   the Rothera's reagent amount, the ammonium hydroxide volume and the boiling time.
 - **Cases.** Add or edit entries in `Lab.SCENARIOS`. Each case sets `albumin`,
   `glucose` (0–4), `ketones` and `bile`.
+- **Waste segregation.** Edit `Lab.WASTE` in `js/data.js`: the labelled containers and which one
+  each experiment's mixture belongs in. The default routing is: heat test (urine only) →
+  biological waste; Benedict's → heavy-metal (copper) waste; Rothera's → alkaline/nitroprusside
+  waste; Hay's → mixed chemical waste. **Check this against your laboratory's waste protocol.**
 - **Rules text.** Edit `Lab.RULES`. Every warning and the report refer to these rule IDs.
 
 ## Testing

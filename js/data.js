@@ -98,7 +98,9 @@ window.Lab = window.Lab || {};
     broken_report: 'Stop and report broken glassware to a laboratory TA immediately.',
     broken_touch: 'Never pick up broken glass or clean the spill yourself.',
     broken_conceal: 'Never conceal an incident or continue working in the affected area.',
-    cleanup: 'Wash glassware, clean the bench and return equipment before leaving.'
+    cleanup: 'Wash glassware, clean the bench and return equipment before leaving.',
+    waste: 'Dispose of reaction mixtures in the designated, correctly labelled waste container — never down the sink.',
+    gloves_used: 'Used gloves are discarded and never re-worn — take a fresh pair from the glove box.'
   };
 
   /* ---------- Performance categories ---------- */
@@ -113,15 +115,18 @@ window.Lab = window.Lab || {};
     fumehood: 'Fume hood use',
     interpretation: 'Result interpretation',
     breakage: 'Broken glassware response',
+    waste: 'Waste disposal',
     cleanup: 'Cleanup & equipment return'
   };
 
   /* ---------- Stations on the laboratory floor plan ---------- */
   L.STATIONS = {
     entrance: { name: 'Entrance & PPE area', x: 62, y: 128 },
-    sink: { name: 'Sink & washing station', x: 195, y: 80 },
-    tech: { name: 'Technician — equipment return', x: 335, y: 80 },
+    sink: { name: 'Sink & washing station', x: 180, y: 80 },
+    waste: { name: 'Chemical waste station', x: 276, y: 80 },
+    tech: { name: 'Technician — equipment return', x: 378, y: 80 },
     ta: { name: 'Teaching assistants\' desk', x: 480, y: 80 },
+    ppe: { name: 'PPE station — glove box', x: 582, y: 80 },
     bench1: { name: 'Bench 1 — Heat test', x: 210, y: 172 },
     bench2: { name: 'Bench 2 — Benedict\'s test', x: 370, y: 172 },
     bench3: { name: 'Bench 3 — Rothera\'s preparation', x: 530, y: 172 },
@@ -200,6 +205,30 @@ window.Lab = window.Lab || {};
       notes: 'Bile salts lower the surface tension of urine, so the light sulfur powder sinks. In normal urine the surface tension keeps the powder floating.'
     }
   ];
+
+  /* ---------- Waste segregation (edit to match your laboratory's waste protocol) ---------- */
+  L.WASTE = {
+    containers: [
+      { id: 'bio', icon: '☣️', label: 'Biological waste', sub: 'Urine only — disinfectant added' },
+      { id: 'copper', icon: '⚗️', label: 'Heavy-metal waste', sub: 'Copper-containing solutions' },
+      { id: 'alkaline', icon: '🧪', label: 'Alkaline / nitroprusside waste', sub: 'Ammonia + nitroprusside — keep lid closed' },
+      { id: 'mixed', icon: '🗑️', label: 'Mixed chemical waste', sub: 'Urine with insoluble powders (sulfur)' }
+    ],
+    // which container each experiment's reaction mixture belongs in
+    route: { albumin: 'bio', benedict: 'copper', rothera: 'alkaline', hay: 'mixed' },
+    describe: {
+      albumin: 'heated urine (no reagent added)',
+      benedict: 'urine with Benedict\'s reagent (copper sulfate)',
+      rothera: 'urine with Rothera\'s reagent and ammonium hydroxide',
+      hay: 'urine with sulfur powder'
+    },
+    why: {
+      albumin: 'It contains only urine, so it is biological waste and must be disinfected before disposal.',
+      benedict: 'Benedict\'s reagent contains copper — a heavy metal that must not enter the drains and is collected separately.',
+      rothera: 'It contains ammonium hydroxide and sodium nitroprusside, which are collected separately in a closed alkaline waste container.',
+      hay: 'It contains insoluble sulfur powder, which would block drains and goes to mixed chemical waste.'
+    }
+  };
 
   /* ---------- Reagent catalogue (bench tray items) ---------- */
   L.REAGENTS = {

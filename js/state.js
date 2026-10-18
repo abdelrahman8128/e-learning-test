@@ -53,9 +53,9 @@
         wiped: { bench1: false, bench2: false, bench3: false, bench4: false, hood: false },
         stool: 'aisle', // 'aisle' | 'stowed'
         returned: false,
-        glovesOff: false,
         handsWashed: false
       },
+      usedGloves: 0,    // pairs discarded (never re-worn)
       breakages: [],    // {reported, violations, at}
       startedAt: Date.now(),
       endedAt: null,

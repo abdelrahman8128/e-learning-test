@@ -204,7 +204,9 @@
     h += '<section class="card ppe"><h3>Your PPE</h3><div class="ppe-mini">' + UI.avatarSVG(p, S.phase === 'entry' ? S.belongings : null) + '</div><ul class="ppe-list">' +
       '<li class="' + (coatOk ? 'ok' : 'no') + '">🥼 Lab coat: ' + (p.coat ? (coatOk ? 'worn, fully buttoned' : 'NOT fully buttoned') : 'not worn') + '</li>' +
       '<li class="' + (p.gloves ? 'ok' : 'no') + '">🧤 Gloves: ' + (p.gloves ? 'on' : 'off') +
-      (S.phase !== 'report' && !(S.phase === 'cleanup' && S.cleanup.glovesOff) ? ' <button class="btn xs" data-act="ppe" data-v="gloves">' + (p.gloves ? 'Remove' : 'Put on') + '</button>' : '') + '</li>' +
+      (S.phase === 'report' ? '' : p.gloves ? ' <button class="btn xs" data-act="ppe" data-v="gloves" title="Used gloves go in the clinical waste bin and cannot be re-worn">Remove &amp; discard</button>' :
+        (S.phase === 'entry' ? ' <small>— take a pair at the PPE station</small>' : ' <a href="#" class="xs-link" data-goto="ppe">Get a fresh pair →</a>')) + '</li>' +
+      (S.usedGloves ? '<li class="muted">🗑️ Used pairs discarded: ' + S.usedGloves + '</li>' : '') +
       '<li class="' + (p.goggles ? 'ok' : 'no') + '">🥽 Goggles: ' + (p.goggles ? 'on' : 'off') +
       (S.phase !== 'report' ? ' <button class="btn xs" data-act="ppe" data-v="goggles">' + (p.goggles ? 'Remove' : 'Put on') + '</button>' : '') + '</li>' +
       (S.phase === 'entry' && p.coat ? '<li><button class="btn xs" data-act="ppe" data-v="coat">Take coat off</button></li>' : '') +
@@ -296,14 +298,15 @@
 
   var GLOBAL = {
     fullscreen: function () { toggleFullscreen(); },
+    'take-gloves': function () { if (L.S.station === 'ppe') L.Gloves.takeNew(); },
     enter: function () { L.Scene.enter(); },
     ppe: function (a) {
       var S = L.S, k = a.dataset.v;
       if (k === 'coat') { S.ppe.coat = false; S.ppe.buttons = [false, false, false, false]; return; }
       if (L.Exp.Heating.isRunning()) return;
+      if (k === 'gloves') { L.Gloves.discard(); return; }
       S.ppe[k] = !S.ppe[k];
-      if (k === 'gloves' && S.ppe.gloves && S.phase === 'cleanup') S.cleanup.glovesOff = false;
-      UI.toast((k === 'gloves' ? 'Gloves ' : 'Goggles ') + (S.ppe[k] ? 'on.' : 'removed.'), S.ppe[k] ? 'good' : 'info');
+      UI.toast('Goggles ' + (S.ppe[k] ? 'on.' : 'removed.'), S.ppe[k] ? 'good' : 'info');
     },
     'ta-hint': function () { L.Scene.hint(); },
     'ta-rules': function () { L.Scene.rules(); },

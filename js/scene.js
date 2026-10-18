@@ -36,7 +36,7 @@
   Scene.stationChips = function () {
     var s = S(), target = Scene.targetStation();
     var short = { entrance: '🚪 Entrance', bench1: '1 · Heat', bench2: '2 · Benedict', bench3: '3 · Rothera', bench4: '4 · Hay',
-      hood: '🌀 Fume hood', laminar: 'Laminar', sink: '🚰 Sink', tech: '🧑‍🔧 Technician', ta: '👩‍🔬 TA' };
+      hood: '🌀 Fume hood', laminar: 'Laminar', ppe: '🧤 PPE station', sink: '🚰 Sink', waste: '🗑️ Waste', tech: '🧑‍🔧 Technician', ta: '👩‍🔬 TA' };
     return Object.keys(short).map(function (id) {
       var done = /^bench(\d)$/.test(id) && s.exps[+id.slice(5) - 1].done;
       return '<button class="chip' + (s.station === id ? ' here' : '') + (target === id && s.station !== id ? ' target' : '') + '" data-goto="' + id + '"' +
@@ -56,10 +56,12 @@
       '<rect x="0" y="204" width="8" height="50" class="door"/><text x="14" y="218" class="door-lbl">Entrance</text>' +
       '<rect x="988" y="204" width="10" height="50" class="exit"/><text x="982" y="218" text-anchor="end" class="exit-lbl">EMERGENCY EXIT</text>' +
       stationRect('entrance', 8, 10, 110, 180, 'Entrance', 'PPE area & lockers', 'ppe' + tag('entrance')) +
-      stationRect('sink', 140, 12, 110, 48, 'Sink', 'washing station', 'util') +
-      stationRect('tech', 270, 12, 130, 48, 'Technician', 'equipment return', 'util') +
-      stationRect('ta', 420, 12, 120, 48, 'Lab TAs', 'help & reporting', 'util') +
-      '<g class="decor"><rect x="560" y="12" width="140" height="48" rx="6"/><text x="630" y="34" text-anchor="middle" class="lbl">Stock reagents</text><text x="630" y="49" text-anchor="middle" class="sub">do not move</text></g>' +
+      stationRect('sink', 140, 12, 80, 48, 'Sink', 'washing', 'util') +
+      stationRect('waste', 230, 12, 92, 48, 'Waste', 'chemical waste', 'util waste' + tag('waste')) +
+      stationRect('tech', 332, 12, 92, 48, 'Technician', 'equipment return', 'util') +
+      stationRect('ta', 434, 12, 92, 48, 'Lab TAs', 'help & reporting', 'util') +
+      stationRect('ppe', 536, 12, 92, 48, 'PPE station', 'glove box', 'util ppe-st' + tag('ppe')) +
+      '<g class="decor"><rect x="640" y="12" width="140" height="48" rx="6"/><text x="710" y="34" text-anchor="middle" class="lbl">Stock reagents</text><text x="710" y="49" text-anchor="middle" class="sub">do not move</text></g>' +
       stationRect('bench1', 140, 96, 140, 52, 'Bench 1' + done(1), 'Heat test (albumin)', 'bench' + tag('bench1')) +
       stationRect('bench2', 300, 96, 140, 52, 'Bench 2' + done(2), 'Benedict\'s (glucose)', 'bench' + tag('bench2')) +
       stationRect('bench3', 460, 96, 140, 52, 'Bench 3' + done(3), 'Rothera\'s prep (ketones)', 'bench' + tag('bench3')) +
@@ -312,7 +314,7 @@
       if (!p.goggles) missing.push('<li><strong>Safety goggles</strong> — you will be stopped from heating or handling acids/hazardous reagents until you put them on.</li>');
       UI.modal({
         title: 'PPE reminder', body: '<p>You are not wearing:</p><ul>' + missing.join('') + '</ul><p>You may enter, but you can put them on now (recommended).</p>',
-        buttons: [{ label: 'Go back and put them on', cls: 'primary' }, { label: 'Enter anyway', onClick: function () { doEnter(); } }]
+        buttons: [{ label: 'Go back and put them on' }, { label: 'Enter anyway', onClick: function () { doEnter(); } }]
       });
       return;
     }
@@ -351,7 +353,7 @@
       var where = (e.id === 'rothera' && L.Exp.isDone(e, 'mix')) ? 'the chemical fume hood' : L.STATIONS[d.station].name;
       txt = 'Experiment ' + d.num + ' (' + d.title + ') takes place at ' + where + '. ' + (st ? 'Next step: ' + st.text : '') +
         (e.tube.spoiled || e.tube.disturbed ? ' Your tube must be reset first.' : '') +
-        (!s.ppe.gloves ? ' Remember: gloves are required for handling samples and reagents.' : '') +
+        (!s.ppe.gloves ? ' You are not wearing gloves — take a fresh pair from the glove box at the PPE station before handling samples or reagents.' : '') +
         ((d.hasBurner || e.id === 'rothera' || e.id === 'albumin') && !s.ppe.goggles ? ' You will also need your goggles.' : '');
     }
     UI.modal({ title: '💡 TA guidance', body: '<p>' + txt + '</p>', buttons: [{ label: 'Thanks', cls: 'primary' }] });
@@ -379,7 +381,23 @@
       fix: 'Carry the rack to the chemical fume hood (top right of the floor plan).' });
   };
 
+  /** In-lab PPE station: glove box (fresh pairs) and the clinical waste bin for used gloves. */
+  Scene.ppeView = function () {
+    var s = S(), p = s.ppe;
+    return '<div class="panel ppe-station"><h2>🧤 PPE station</h2>' +
+      '<p>Fresh gloves are kept here. Used gloves are never re-worn: they go in the clinical waste bin and you take a new pair.</p>' +
+      '<div class="ppe-st-grid">' +
+      '<div class="glovebox"><span class="big-ico">🧤</span><strong>Glove box</strong><small>Nitrile gloves — single use</small>' +
+      '<button class="btn" data-act="take-gloves"' + (p.gloves ? ' disabled' : '') + '>' + (p.gloves ? 'You are wearing gloves' : 'Take a fresh pair and put them on') + '</button></div>' +
+      '<div class="glovebin"><span class="big-ico">🗑️</span><strong>Used gloves</strong><small>Clinical waste — ' + s.usedGloves + ' pair(s) discarded</small>' +
+      '<p class="tiny">Used pairs cannot be taken back out.</p></div>' +
+      '</div>' +
+      '<p class="tiny">Remove gloves with “Remove &amp; discard” in the <strong>Your PPE</strong> panel. Goggles can be put on or taken off there too.</p></div>';
+  };
+
   Scene.otherView = function (station) {
+    if (station === 'ppe') return Scene.ppeView();
+    if (station === 'waste') return L.Cleanup.wasteView();
     if (station === 'sink') return L.Cleanup.sinkView();
     if (station === 'tech') return L.Cleanup.techView();
     if (station === 'ta') return Scene.taView();

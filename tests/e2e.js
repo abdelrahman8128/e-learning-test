@@ -65,7 +65,13 @@ async function volume(v) {
 }
 async function ppe(item, wantOn) {
   const s = await S();
-  if (!!s.ppe[item] !== wantOn) { await page.click('#left [data-act="ppe"][data-v="' + item + '"]'); await wait(100); }
+  if (!!s.ppe[item] === wantOn) return;
+  if (item === 'gloves' && wantOn) {   // fresh gloves come only from the glove box at the PPE station
+    const back = s.station;
+    await goto('ppe'); await act('take-gloves'); await goto(back);
+    return;
+  }
+  await page.click('#left [data-act="ppe"][data-v="' + item + '"]'); await wait(100);
 }
 async function answerQuiz(correct) {
   // answers are derived from the scenario: ask the app for the correct ones
@@ -372,12 +378,33 @@ async function finishHeat() { await page.click('.heat-modal .modal-foot .btn.pri
   ok(!(await S()).cleanup.returned, 'technician refuses unwashed tubes');
   await closeModals();
   await goto('sink');
+  await act('c-sinkpour', 'benedict');
+  ok(await hasViolation('sink-pour-benedict') && (await S()).exps[1].tube.washStage === 0, 'pouring a reaction mixture down the sink is blocked');
+  await closeModals();
+  await page.click('#station [data-act="c-wash"][data-v="albumin"][data-i="1"]'); await wait(100);
+  ok(await hasTech('wash-before-waste'), 'tubes cannot be washed before the mixture is disposed of');
+  await closeModals();
+  await goto('waste');
+  await page.click('#station [data-act="c-waste"][data-v="benedict"][data-w="bio"]'); await wait(120);
+  ok(await hasTech('waste-wrong-benedict-bio') && (await S()).exps[1].tube.washStage === 0, 'wrong waste container is explained and refused');
+  await closeModals();
+  const route = await page.evaluate(() => Lab.WASTE.route);
   for (const id of ['albumin', 'benedict', 'rothera', 'hay']) {
-    for (let i = 0; i < 4; i++) await page.click('#station [data-act="c-wash"][data-v="' + id + '"][data-i="' + i + '"]');
+    await page.click('#station [data-act="c-waste"][data-v="' + id + '"][data-w="' + route[id] + '"]'); await wait(100);
+  }
+  ok((await S()).exps.every(e => e.tube.washStage >= 1), 'each mixture emptied into its designated waste container');
+  await goto('sink');
+  for (const id of ['albumin', 'benedict', 'rothera', 'hay']) {
+    for (let i = 1; i < 4; i++) await page.click('#station [data-act="c-wash"][data-v="' + id + '"][data-i="' + i + '"]');
   }
   await goto('tech'); await act('c-return');
   ok((await S()).cleanup.returned, 'equipment returned');
   await page.click('#map .stool'); await choose('Push it');
+  await goto('sink'); await act('c-gloves');
+  const sg = await S();
+  ok(!sg.ppe.gloves && sg.usedGloves >= 1 && !(await page.$('#left [data-act="ppe"][data-v="gloves"]')), 'used gloves discarded and cannot be put back on');
+  await goto('ppe'); await act('take-gloves');
+  ok((await S()).ppe.gloves && (await S()).usedGloves === sg.usedGloves, 'a fresh pair can be taken from the glove box');
   await goto('sink'); await act('c-gloves'); await act('c-hands');
   await goto('entrance'); await act('finish');
   ok((await S()).phase === 'report', 'report shown after full cleanup');

@@ -63,8 +63,35 @@
       title: 'Gloves not worn',
       action: 'You tried to ' + context + ' with bare hands.',
       consequence: 'Urine samples are potentially infectious and reagents such as Benedict\'s (copper salts), acids and ammonia irritate or burn skin. Contamination can also spread to your face, phone or food.',
-      fix: 'Put on gloves using the PPE panel (left), then repeat the action.'
+      fix: L.S.phase === 'entry' ? 'Take a pair of gloves from the PPE station and drag them onto yourself.' :
+        'Walk to the PPE station (glove box) on the floor plan, take a fresh pair, then repeat the action.'
     });
+  };
+
+  /* ---------- Gloves: used pairs are discarded, fresh pairs come from the glove box ---------- */
+  var Gloves = L.Gloves = {};
+
+  /** Remove the gloves being worn: they go into the clinical waste bin and are never re-worn. */
+  Gloves.discard = function () {
+    var S = L.S;
+    if (!S.ppe.gloves) return false;
+    S.ppe.gloves = false;
+    S.usedGloves++;
+    L.UI.toast('Gloves peeled off inside-out into the clinical waste bin. Used gloves are never re-worn — take a fresh pair from the PPE station when you need gloves again.', 'info', 5000);
+    L.requestRender();
+    return true;
+  };
+
+  /** Take a fresh pair from the glove box. */
+  Gloves.takeNew = function () {
+    var S = L.S;
+    if (S.ppe.gloves) { L.UI.toast('You are already wearing gloves.', 'info'); return false; }
+    S.ppe.gloves = true;
+    if (S.phase === 'cleanup') S.cleanup.handsWashed = false; // hands must be washed again after this pair
+    L.Score.good('fresh-gloves-' + S.usedGloves, 'Put on a fresh pair of gloves', 'ppe');
+    L.UI.toast('Fresh pair of gloves on' + (S.ppe.coat ? ' — cuffs over the coat sleeves.' : '.'), 'good');
+    L.requestRender();
+    return true;
   };
 
   var GOGGLE_REASONS = {
