@@ -9,6 +9,12 @@ simulated reactions, interpret the results and clean up. Every action gets feedb
 > All reactions, boiling, splashing and injuries are **simulated** for teaching. The application
 > performs no real chemical analysis.
 
+
+## More labs in this repository
+
+* **Rat Bone Marrow Chromosome Extraction and Karyotyping** (Faculty of Biotechnology, MSA University) — a two-stage
+  virtual lab (Lab 7 → Lab 8) in [`rat-karyotype/`](rat-karyotype/README.md). Open `rat-karyotype/index.html`.
+
 ## Running it
 
 No build step, server or internet connection is needed. Open `index.html` in any current
