@@ -1,6 +1,6 @@
-/* End-to-end test for the Rat Bone Marrow Karyotyping virtual lab.
+/* End-to-end test for the Rat Bone Marrow Extraction and Karyotyping virtual labs (Lab 7 + Lab 8).
  *   node tests/rat-karyotype-e2e.js            (needs the `playwright` package)
- * Set SHOTS=dir to save screenshots. Covers the ten required test conditions.
+ * Set SHOTS=dir to save screenshots.
  */
 const path = require('path');
 let chromium;
@@ -13,67 +13,157 @@ const errors = [];
 
 const ok = (c, m) => { if (c) { passes++; console.log('  ✔ ' + m); } else { failures++; console.log('  ✘ ' + m); } };
 const wait = ms => page.waitForTimeout(ms);
-const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const shot = async n => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, n + '.png') }); };
 const ev = (fn, arg) => page.evaluate(fn, arg);
+const hash = () => ev(() => location.hash);
+const noOverflow = () => ev(() => document.documentElement.scrollWidth <= window.innerWidth + 2);
+const state = () => ev(() => JSON.parse(JSON.stringify(KL.Store.get())));
 
 async function openPage(p) {
   p.on('pageerror', e => errors.push('PAGEERR ' + e.message));
   p.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await p.goto(URL); await p.waitForSelector('#view *');
-  await p.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; });   // accelerated clocks for testing
+  await p.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; });
 }
-const opt = (t) => page.locator('.opt').filter({ hasText: new RegExp('^\\s*' + esc(t) + '\\s*$') });
-const pick = async t => { await opt(t).first().locator('input').check(); };
-const clickBtn = async t => { await page.locator('button').filter({ hasText: new RegExp('^\\s*' + esc(t) + '\\s*$') }).first().click(); await wait(80); };
+const go = async h => { await page.evaluate(x => { location.hash = x; }, h); await wait(150); };
+const clickBtn = async t => { await page.locator('button').filter({ hasText: t }).first().click(); await wait(90); };
 const setRange = async (idx, v) => { await page.locator('.dial input[type=range]').nth(idx).evaluate((el, val) => { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }, String(v)); };
-const doneBanner = async () => { await page.waitForSelector('.done-banner .banner', { timeout: 8000 }); };
-const next = async () => { await doneBanner(); await page.click('#btn-next'); await wait(150); };
+const doneBanner = async () => { await page.waitForSelector('.done-banner .banner', { timeout: 9000 }); };
+const next = async () => { await doneBanner(); await page.click('#btn-next'); await wait(160); };
 const fbText = async () => (await page.locator('.fb').first().innerText().catch(() => ''));
-const state = () => ev(() => JSON.parse(JSON.stringify(KL.Store.get())));
-const hash = () => ev(() => location.hash);
-const noOverflow = () => ev(() => document.documentElement.scrollWidth <= window.innerWidth + 2);
 
-/* --------------------------------------------------------------- Lab 7 steps */
-async function seq(texts) { for (const t of texts) await page.locator('.seq-item').filter({ hasText: t }).first().click(); }
-const LAB7 = {
-  1: async () => { await seq(['binds tubulin', 'No mitotic spindle', 'held at metaphase', 'More metaphase cells']); await clickBtn('Check order'); },
-  2: async () => { for (const t of ['approved animal-ethics protocol', 'trained, authorised personnel', 'method is the one specified']) await page.locator('.opt').filter({ hasText: t }).locator('input').check(); await clickBtn('Check selection'); },
-  3: async () => { await clickBtn('Bone layer'); await page.dispatchEvent('[data-region="femur"]', 'click'); },
-  4: async () => { await page.dispatchEvent('[data-inc="incA"]', 'click'); },
-  5: async () => { await clickBtn('Reflect the skin'); await page.dispatchEvent('[data-region="thigh-muscle"]', 'click'); },
-  6: async () => { await page.dispatchEvent('.marker[data-m="hip"]', 'click'); await page.dispatchEvent('.marker[data-m="knee"]', 'click'); await clickBtn('Check release points'); },
-  7: async () => { for (const t of ['Scissors', 'Forceps', 'Gauze']) await pick(t); await clickBtn('Check selection'); },
-  8: async () => { while (await page.$('.patch')) await page.dispatchEvent('.patch', 'click'); },
-  9: async () => { const b = await page.locator('.femur-host svg').boundingBox(); for (const x of [80, 322]) await page.mouse.click(b.x + x / 400 * b.width, b.y + 100 / 200 * b.height); await clickBtn('Make the cuts'); },
-  10: async () => { await pick('Phosphate-buffered saline (PBS)'); await clickBtn('Check answer'); await setRange(0, 3); await clickBtn('Confirm volume'); await clickBtn('Flush the femur'); },
-  11: async () => { for (let i = 0; i < 5; i++) await clickBtn('Pipette up and down gently'); },
-  12: async () => { await centrifuge(); },
-  13: async () => { await pick('KCl 0.075 M (hypotonic)'); await clickBtn('Check answer'); await setRange(0, 3); await clickBtn('Add to the tube'); await pick('The medium is hypotonic, so water enters the cells by osmosis'); await clickBtn('Check answer'); },
-  14: async () => { await setRange(0, 37); await clickBtn('Start incubation'); await wait(2500); await clickBtn('Remove the tube'); },
-  15: async () => { await centrifuge(); await pick('Remove the supernatant carefully, leaving the pellet undisturbed'); await clickBtn('Check answer'); },
-  16: async () => {
-    for (const t of ['Lab coat, gloves and safety goggles on', 'Work carried out inside a chemical fume hood', 'Trained supervision and approved laboratory facilities']) await pick(t);
-    await clickBtn('Check selection'); await setRange(0, 2.25); await setRange(1, 0.75); await clickBtn('Confirm fixative'); await clickBtn('Add fixative gently and let it stand');
-  },
-  17: async () => { await seq(['Centrifuge the tube', 'Remove the supernatant', 'Add fresh fixative', 'Resuspend the cells gently']); await clickBtn('Check order'); await pick('The designated, labelled chemical (solvent) waste container, kept capped'); await clickBtn('Check answer'); }
-};
+/* ---------- generic stage helpers ---------- */
+const tools = async names => { for (const n of names) await page.locator('.tpick').filter({ has: page.getByText(n, { exact: true }) }).first().click(); await clickBtn('Confirm selection'); await wait(120); };
+const single = async t => { await page.locator('.opt').filter({ hasText: t }).first().locator('input').check(); await clickBtn('Check answer'); await wait(80); };
+const multi = async ts => { for (const t of ts) await page.locator('.opt').filter({ hasText: t }).first().locator('input').check(); await clickBtn('Check selection'); await wait(80); };
+const seq = async ts => { for (const t of ts) await page.locator('.seq-item:not(.used)').filter({ hasText: t }).first().click(); await clickBtn('Check order'); await wait(80); };
+const region = async (r) => { await page.locator('[data-region="' + r + '"]').first().dispatchEvent('click'); await wait(110); };
+const patches = async () => { while (await page.locator('.task-area .patch').count()) { await page.locator('.task-area .patch').first().dispatchEvent('click'); await wait(90); } await wait(600); };
 async function centrifuge() {
   await page.dispatchEvent('.rslot[data-slot="0"]', 'click'); await page.dispatchEvent('.rslot[data-slot="3"]', 'click'); await wait(900);
   await setRange(0, 2000); await setRange(1, 5); await clickBtn('Start centrifuge');
-  await page.waitForSelector('.hit-pel', { timeout: 6000 }); await page.click('.hit-pel'); await wait(100);
+  await page.waitForSelector('.hit-pel', { timeout: 6000 }); await page.click('.hit-pel'); await wait(150);
 }
-/* --------------------------------------------------------------- Lab 8 steps */
-async function arrangeKaryotype(opts) {
-  opts = opts || {};
+async function timed(minLabel) {   // start the accelerated clock, wait for the simulated minutes, stop
+  await page.locator('button').filter({ hasText: /^(Start incubation|Start timing|Start staining)$/ }).click();
+  const target = minLabel;
+  for (let i = 0; i < 60; i++) { const t = await page.locator('.big-read').innerText(); const [m] = t.split(':').map(Number); if (m >= target) break; await wait(100); }
+  await wait(60);
+  await page.locator('button').filter({ hasText: /^(Remove tube|Finish fixation|Rinse)$/ }).click(); await wait(150);
+}
+
+/* ---------- Lab 7 solvers (ids = step numbers) ---------- */
+const LAB7 = {
+  1: async () => { await tools(['Lab coat', 'Gloves', 'Dissection pad']); await single('By its label/record'); await multi(['approved animal-ethics protocol', 'trained, authorised personnel', 'method is the one specified']); await seq(['Check specimen identity', 'Colchicine pretreatment', 'Approved humane euthanasia', 'Confirm death', 'Begin dissection']); },
+  2: async () => { await tools(['Dissection pad', 'Gloves']); await page.click('#rot-next'); await wait(100); await region('hindlimb'); await region('femur'); },
+  3: async () => { await tools(['Scissors', 'Forceps', 'Gloves']); await page.locator('[data-inc="incA"]').dispatchEvent('click'); },
+  4: async () => { await tools(['Forceps', 'Scissors', 'Gloves']); await seq(['Grip the cut skin', 'Free the skin', 'Fold the skin']); await region('skin-flap'); },
+  5: async () => { await tools(['Forceps', 'Gauze', 'Gloves']); await region('thigh-muscle'); await region('shank-muscle'); },
+  6: async () => { await tools(['Scissors', 'Forceps', 'Gauze', 'Gloves']); await region('femur'); await patches(); await region('femur'); },
+  7: async () => { await tools(['Scissors', 'Forceps', 'Gauze', 'Gloves']); await region('tibia'); await patches(); await region('tibia'); },
+  8: async () => { await tools(['Gauze', 'Forceps', 'Gloves']); await patches(); await multi(['The femur is clean', 'The tibia is clean']); },
+  9: async () => { await tools(['Scissors', 'Forceps', 'Gauze', 'Gloves']); for (const r of ['femur-prox', 'femur-dist', 'tibia-prox', 'tibia-dist']) await region(r); await wait(600); await single('Just beyond each epiphysis'); },
+  10: async () => {
+    await tools(['Syringe with needle', 'Saline / PBS', 'Labelled collection tubes', 'Gloves']);
+    for (const [kind, lab] of [['femur', 'Femur sample (F)'], ['tibia', 'Tibia sample (T)']]) {
+      await single('physiological saline'); await seq(['Fill the syringe', 'Place the needle', 'Flush the marrow']); await single(lab); await wait(300);
+    }
+  },
+  11: async () => { await tools(['Centrifuge', 'Labelled collection tubes', 'Gloves']); await single('To collect the cells'); await single('Capped, with equal volumes'); await centrifuge(); await single('Remove it gently'); await single('The pellet holds the marrow cells'); },
+  12: async () => { await tools(['Pipette', 'Labelled collection tubes', 'Saline / PBS', 'Gloves']); await seq(['Remove the supernatant', 'Resuspend the pellet', 'Check the suspension']); await single('Gently, by pipetting'); await single('A bone marrow cell suspension'); }
+};
+async function checkpointRun(exam) {
+  for (let i = 0; i < 6; i++) {
+    const q = (await page.locator('.task-prompt').first().innerText()).trim();
+    const right = await ev(qq => { const e = KL.LAB7.CHECK_POOL.filter(x => x.q === qq)[0]; return e.o.filter(o => o[1])[0][0]; }, q);
+    await page.locator('.opt').filter({ hasText: right }).first().locator('input').check(); await clickBtn('Check answer');
+    if (!exam) { const b = page.locator('#btn-nextq'); if (await b.count()) await b.click(); await wait(100); }
+    await wait(100);
+  }
+}
+async function doStep(solvers, n) { try { await solvers[n](); await doneBanner(); } catch (e) { console.log('  !! step ' + n + ' failed: ' + (await fbText()).slice(0, 200)); await shot('fail-step-' + n); throw e; } }
+async function lab7All(exam) {
+  for (let n = 1; n <= 12; n++) { await doStep(LAB7, n); await page.click('#btn-next'); await wait(170); }
+  await checkpointRun(exam);
+  await page.waitForSelector('#btn-finish7', { timeout: 5000 });
+}
+
+/* ---------- Lab 8 solvers ---------- */
+const Q = { cards: async (ids, pickFn) => { const got = await page.locator('.card-opt').evaluateAll(els => els.map(e => e.dataset.card)); const id = pickFn(got.length ? got : ids); await page.locator('.card-opt[data-card="' + id + '"]').click(); await wait(150); } };
+async function karyoArrange() {
   const info = await ev(() => ({ slots: KL.KARYO.slots, chroms: KL.KARYO.chroms }));
   const slotOf = pair => info.slots.find(s => s.key === (pair === 'X' || pair === 'Y' ? 'XY' : pair)).index;
-  const K = () => ev(() => JSON.parse(JSON.stringify(KL.Store.get().lab8.karyotype)));
-  const only = opts.only || info.chroms.length;
-  for (const c of info.chroms.slice(0, only)) {
-    await page.click('.chr.tray[data-id="' + c.id + '"]'); await page.click('.kslot[data-slot="' + slotOf(c.pair) + '"] .kslot-h');
+  for (const c of info.chroms) { await page.click('.chr.tray[data-id="' + c.id + '"]'); await page.click('.kslot[data-slot="' + slotOf(c.pair) + '"] .kslot-h'); }
+  const K = await ev(() => JSON.parse(JSON.stringify(KL.Store.d('lab8').karyotype)));
+  for (const c of info.chroms.filter(c => K.chr[c.id].rot !== 0)) { await page.click('.chr[data-id="' + c.id + '"]'); await page.click('[data-k="rot"]'); }
+  for (let r = 0; r < 4; r++) await page.click('[data-assist="' + r + '"]');
+  for (const s of info.slots) await page.fill('.klabel[data-slot="' + s.index + '"]', s.key === 'XY' ? 'X Y' : s.key);
+  return info;
+}
+async function measureAll() {
+  const calcs = await ev(() => { const out = {}; KL.CONFIG.measure.requiredPairs.forEach(id => { const [a, b] = KL.KARYO.chroms.filter(c => c.pair === id); const v = { La: a.L, Sa: a.S, Lb: b.L, Sb: b.S }; out[id] = { v, e: KL.Measure.expected(v, KL.KARYO.haploidTotal) }; }); return out; });
+  for (const id of ['1', '3', '4', '13', '14', '20']) {
+    await page.click('.pbtn[data-pair="' + id + '"]'); await wait(60);
+    const { v, e } = calcs[id];
+    for (const k of ['La', 'Sa', 'Lb', 'Sb']) await page.fill('[data-m="' + k + '"]', String(v[k]));
+    await clickBtn('Check measurements');
+    await page.fill('[data-c="avgL"]', e.avgL.toFixed(2)); await page.fill('[data-c="avgS"]', e.avgS.toFixed(2));
+    await page.fill('[data-c="ar"]', e.telo ? 'n/a' : e.ar.toFixed(2)); await page.fill('[data-c="ci"]', e.ci.toFixed(1)); await page.fill('[data-c="rl"]', e.rl.toFixed(2));
+    await clickBtn('Check calculations');
   }
-  return { info, slotOf, K };
+}
+const LAB8 = {
+  1: async () => { await tools(['Labelled collection tubes', 'Gloves', 'Lab coat']); await single('The bone marrow cell suspension'); await seq(['Colchicine pretreatment', 'Bone marrow collection', 'Hypotonic treatment', 'Cell harvesting and fixation', 'Slide preparation, spreading', 'Microscopy and chromosome', 'Karyotyping']); },
+  2: async () => { await tools(['KCl solution', 'Water bath', 'Timer', 'Pipette', 'Gloves']); await single('KCl 0.075 M'); await setRange(0, 3); await clickBtn('Confirm volume'); await single('37 °C'); await timed(10); },
+  3: async () => { await tools(['Centrifuge', 'Labelled collection tubes', 'Pipette', 'Gloves']); await centrifuge(); await single('Remove the supernatant carefully'); },
+  4: async () => { await tools(['Methanol : acetic acid fixative', 'Fume hood', 'Pipette', 'Gloves', 'Eye protection', 'Lab coat']); await single('Methanol : acetic acid (Carnoy fixative)'); await single('3 : 1'); await setRange(0, 3); await clickBtn('Confirm volume'); await single('In a fume hood'); await timed(10); },
+  5: async () => { await tools(['Clean glass slides', 'Cold ethanol (slide storage)', 'Forceps', 'Gloves']); await single('A clean slide kept in cold'); },
+  6: async () => { await tools(['Pipette / dropper', 'Clean glass slides', 'Gloves', 'Eye protection', 'Lab coat']); await page.click('#btn-drop'); await page.click('#btn-drop'); await clickBtn('Confirm'); await multi(['trained supervision', 'containers closed', 'Wear lab coat', 'fire extinguisher']); await page.click('#btn-spread'); await page.waitForSelector('.stage-tag', { timeout: 100 }).catch(() => { }); await wait(1900); },
+  7: async () => { await tools(['Giemsa stain', 'Timer', 'Distilled water', 'Filter paper', 'Clean glass slides', 'Gloves']); await single('Giemsa working solution at 10%'); await timed(10); await single('Gently with distilled water'); await single('Air-dry on filter paper'); },
+  8: async () => { await tools(['Light microscope', 'Clean glass slides', 'Gloves']); await page.locator('.card-opt[data-card="good"]').click(); await wait(120); await single('Overlapping chromosomes'); },
+  9: async () => {
+    await tools(['Light microscope', 'Clean glass slides']); await single('Stained side up');
+    // focus: scan the slider for the sharpest value
+    let best = 0, bb = 99;
+    for (let v = 0; v <= 100; v += 2) { await setRange(0, v); const f = await page.locator('.focus-view svg').evaluate(e => parseFloat((e.style.filter.match(/[\d.]+/) || [99])[0])); if (f < bb) { bb = f; best = v; } }
+    await setRange(0, best); await page.click('#btn-focus'); await wait(150);
+    await page.click('[aria-label="40 times objective"]');
+    const cur = await ev(() => Object.keys(KL.LAB8.current).filter(k => KL.LAB8.current[k].variant === 'good')[0]); const [gc, gr] = cur.split(',').map(Number);
+    let pos = [1, 1];
+    while (pos[0] !== gc) { await page.click('[aria-label="Move stage ' + (gc > pos[0] ? '→' : '←') + '"]'); pos[0] += gc > pos[0] ? 1 : -1; }
+    while (pos[1] !== gr) { await page.click('[aria-label="Move stage ' + (gr > pos[1] ? '↓' : '↑') + '"]'); pos[1] += gr > pos[1] ? 1 : -1; }
+    await page.click('#btn-use-spread'); await wait(120);
+  },
+  10: async () => {
+    await tools(['Light microscope', 'Calculator']);
+    await Q.cards(null, ids => ids.slice().sort((a, b) => ['4a', '5a', '6a'].indexOf(a) >= 0 ? -1 : 1)[0]);
+    // longest: choose by total length
+    await wait(100);
+  },
+  11: async () => { await tools(['Light microscope', 'Ruler', 'Calculator']); for (let i = 0; i < 3; i++) { await page.locator('.card-opt[data-card$="b"]').click(); await wait(200); } },
+  12: async () => { await tools(['Ruler', 'Calculator']); await karyoArrange(); await page.click('#btn-check-karyo'); await wait(100); },
+  13: async () => { await tools(['Ruler', 'Calculator']); await measureAll(); },
+  14: async () => {
+    await tools(['Calculator', 'Ruler']);
+    const want = await ev(() => { const o = {}; KL.CONFIG.measure.requiredPairs.forEach(id => { const r = KL.Store.d('lab8').measure[id].res; o[id] = KL.Calc.classify(r.avgL, r.avgS).cls; }); return o; });
+    for (const id of Object.keys(want)) await page.selectOption('[data-cls="' + id + '"]', want[id]);
+    await clickBtn('Check classification');
+  },
+  15: async () => { await tools(['Calculator']); await page.click('#btn-submit-karyo'); await wait(100); }
+};
+/** Step 10 needs data-driven choices (longest / telocentric / 42). */
+LAB8[10] = async () => {
+  await tools(['Light microscope', 'Calculator']);
+  let ids = await page.locator('.card-opt').evaluateAll(els => els.map(e => e.dataset.card));
+  let best = await ev(a => a.slice().sort((x, y) => { const T = i => KL.KARYO.chroms.filter(c => c.id === i)[0].T; return T(y) - T(x); })[0], ids);
+  await page.locator('.card-opt[data-card="' + best + '"]').click(); await wait(250);
+  ids = await page.locator('.card-opt').evaluateAll(els => els.map(e => e.dataset.card));
+  const telo = await ev(a => a.filter(i => KL.KARYO.chroms.filter(c => c.id === i)[0].S === 0)[0], ids);
+  await page.locator('.card-opt[data-card="' + telo + '"]').click(); await wait(250);
+  await single('42');
+};
+async function lab8All() {
+  for (let n = 1; n <= 15; n++) { await doStep(LAB8, n); if (n < 15) { await page.click('#btn-next'); await wait(170); } }
 }
 
 (async () => {
@@ -82,287 +172,215 @@ async function arrangeKaryotype(opts) {
   page = await ctx.newPage();
   await openPage(page);
 
-  console.log('\n[1] A new student can start Lab 7');
+  console.log('\n[1] Home, locking and navigation guards');
   ok((await hash()) === '#/home', 'opens on the home screen');
-  ok((await page.locator('#btn-lab7').innerText()).includes('Start Lab 7'), 'Lab 7 is offered as “Start Lab 7”');
-  await page.click('#btn-lab7'); await wait(200);
-  ok((await hash()) === '#/lab7/1' && /Colchicine/.test(await page.locator('.step-title h2').innerText()), 'step 1 (Colchicine Pretreatment) opens');
-  ok(await page.locator('.hdr h1').innerText().then(t => /Rat Bone Marrow Chromosome Extraction and Karyotyping/.test(t)), 'header shows the lab title');
-  ok((await page.locator('.stepbtn').count()) === 18 && (await page.locator('.tnode').count()) === 18, 'sidebar and progress tracker list 17 steps + checkpoint');
-  ok(await page.locator('.stepbtn.locked').count() === 17, 'later steps are locked until earlier ones are done');
-  ok((await page.locator('.tab').allInnerTexts()).join('|') === 'Procedure|Anatomy View|Key Points', 'tabs: Procedure · Anatomy View · Key Points');
-  ok(await page.locator('#btn-next').isDisabled(), 'Next is disabled until the step is complete');
-  // neutral options + key points gating
-  await page.click('.tab[data-tab="key"]'); ok(/unlock after your first attempt/.test(await page.locator('.locked-tab').innerText()), 'Key Points are withheld before the first attempt');
-  await page.click('.tab[data-tab="procedure"]');
-  await shot('01-lab7-step1');
+  ok(/Genetics Virtual Laboratory/.test(await page.locator('#hdr-title').innerText()), 'home header shows the genetics lab title');
+  ok((await page.locator('#btn-lab7').innerText()).includes('Start Lab 7'), 'Lab 7 is offered (Guided Revision)');
+  ok(await page.locator('#btn-lab8').getAttribute('aria-disabled') === 'true' && /Locked/.test(await page.locator('#btn-lab8').innerText()), 'Lab 8 shows as locked');
+  ok(await page.locator('#btn-exam-lab7').getAttribute('aria-disabled') === 'true', 'the Lab 7 examination is locked until guided revision is complete');
+  await page.locator('#btn-lab8').click({ force: true }); await wait(200);
+  ok((await hash()) === '#/home' || /lab8/.test(await hash()) === false, 'clicking the locked Lab 8 does not open it');
+  await go('#/lab8/1'); ok((await hash()) === '#/home', 'typing the Lab 8 URL is redirected to Home');
+  await go('#/lab8'); ok((await hash()) === '#/home', 'the Lab 8 intro URL is also redirected');
+  await go('#/exam/lab7'); ok((await hash()) === '#/home', 'the examination URL is redirected before guided completion');
+  await go('#/lab7/5'); ok((await hash()) === '#/lab7/1', 'Lab 7 steps cannot be skipped by URL');
+  await go('#/lab7/done'); ok((await hash()) !== '#/lab7/done', 'the Lab 7 completion page cannot be opened early');
 
-  console.log('\n[2] Lab 8 stays inaccessible before Lab 7 completion');
-  await page.click('#nav-home'); await wait(150);
-  ok((await page.locator('#btn-lab8').getAttribute('aria-disabled')) === 'true', 'Lab 8 button is marked locked');
-  await page.click('#btn-lab8', { force: true }); await wait(150);
-  ok((await hash()) === '#/home', 'clicking Lab 8 does not leave the home screen');
-  await page.evaluate(() => { location.hash = '#/lab8/1'; }); await wait(200);
-  ok((await hash()) === '#/home', 'typing #/lab8/1 in the URL is redirected home');
-  await page.evaluate(() => { location.hash = '#/lab8/done'; }); await wait(200);
-  ok((await hash()) === '#/home', '#/lab8/done is redirected home');
-  await page.evaluate(() => { location.hash = '#/lab7/5'; }); await wait(200);
-  ok((await hash()) === '#/lab7/1', 'jumping ahead inside Lab 7 is redirected to the first incomplete step');
-  const blocked = await ev(() => { try { KL.Store.markStep('lab8', 1, 1, 'x'); return false; } catch (e) { return true; } });
-  ok(blocked, 'writing Lab 8 progress directly through the store throws while Lab 7 is incomplete');
-  // tampering with saved data
-  await ev(() => { const s = JSON.parse(localStorage.getItem('msa-karyo-lab-v1')); s.lab8.steps[1] = { done: true, score: 1 }; s.lab8.finished = true; localStorage.setItem('msa-karyo-lab-v1', JSON.stringify(s)); });
-  await page.reload(); await page.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(200);
-  ok(Object.keys((await state()).lab8.steps).length === 0 && !(await state()).lab8.finished, 'Lab 8 data planted in storage without Lab 7 is discarded');
-  await ev(() => { const s = JSON.parse(localStorage.getItem('msa-karyo-lab-v1')); for (let i = 1; i <= 17; i++) s.lab7.steps[i] = { done: true, score: 1 }; s.lab7.checkpoint.passed = true; localStorage.setItem('msa-karyo-lab-v1', JSON.stringify(s)); });
-  await page.reload(); await page.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; location.hash = '#/home'; }); await wait(250);
-  ok(!(await ev(() => KL.Store.lab7Complete())) && (await page.locator('#btn-lab8').getAttribute('aria-disabled')) === 'true', 'hand-edited “completed” Lab 7 records fail verification: Lab 8 stays locked');
-  ok(/could not be verified|Lab 8 data/.test(await page.locator('.notice').innerText().catch(() => '')), 'the student is told the saved data was rejected');
+  console.log('\n[2] Lab 7 introduction');
+  await go('#/home'); await page.click('#btn-lab7'); await wait(200);
+  ok((await hash()) === '#/lab7', 'Start opens the Lab 7 intro');
+  ok((await page.locator('.intro h1').innerText()) === 'Virtual Lab 7 – Rat Dissection for Bone Marrow Collection (for Karyotyping)', 'Lab 7 intro title is exact');
+  ok((await page.locator('.intro .lead').innerText()) === 'Learn and practise the steps required to collect bone marrow from the rat femur and tibia for chromosome analysis.', 'Lab 7 subtitle is exact');
+  ok(await page.locator('#btn-start').innerText() === 'Start Practical' && await page.locator('#btn-labguide').innerText() === 'Laboratory Guide' && await page.locator('#btn-labhelp').innerText() === 'Help', 'Start Practical / Laboratory Guide / Help buttons');
+  await page.click('#btn-labguide'); ok(/instructor input/i.test(await page.locator('.modal').innerText()) && /4 mg\/kg/.test(await page.locator('.modal').innerText()), 'the Laboratory Guide lists protocol values and instructor-input items');
+  await page.keyboard.press('Escape'); await page.locator('.modal-backdrop').click({ position: { x: 5, y: 5 } }).catch(() => { }); await wait(100);
+  await shot('01-lab7-intro');
+  await page.click('#btn-start'); await wait(200);
+  ok((await hash()) === '#/lab7/1' && await page.locator('.tnode').count() === 13 && await page.locator('.stepbtn').count() === 13, '12 steps plus the checkpoint appear in the horizontal tracker and vertical panel');
 
-  console.log('\n[3] The student can complete Lab 7 (through the real interface) and exit');
-  await page.click('#btn-lab7'); await wait(200);
-  await LAB7[1](); await doneBanner();
-  ok(!(await page.locator('#btn-next').isDisabled()) && /Step complete/.test(await page.locator('.done-banner').innerText()), 'step 1 task completes and unlocks Next');
-  await page.click('.tab[data-tab="key"]'); ok(await page.locator('.keys').count() === 1, 'Key Points unlock once the task has been attempted');
-  await page.click('.tab[data-tab="anatomy"]'); ok(await page.locator('.anat').count() === 1, 'Anatomy View tab shows structures');
-  await page.click('.tab[data-tab="procedure"]');
-  await page.click('#btn-next'); await wait(150);
-  // wrong answers give feedback and allow another attempt (step 2)
-  await page.locator('.opt').filter({ hasText: 'without approval because it is a teaching exercise' }).locator('input').check(); await clickBtn('Check selection');
-  ok(/Safety \/ ethics issue/.test(await fbText()), 'an unethical choice is flagged as a safety/ethics issue (distinct from a scientific error)');
-  await page.locator('.opt input:checked').uncheck();
-  await LAB7[2](); await next();
-  for (let n = 3; n <= 17; n++) { await LAB7[n](); await doneBanner(); await page.click('#btn-next'); await wait(120); }
-  ok((await hash()) === '#/lab7/18', 'all 17 steps completed through the interface → checkpoint');
-  const s1 = await state();
-  ok(s1.lab7.steps[10].done && s1.lab7.steps[16].done && !s1.lab7.checkpoint.passed, 'steps are saved; the checkpoint is not yet passed');
-  console.log('  — checkpoint: wrong answer first');
-  const CHECK = await ev(() => KL.LAB7.CHECK);
-  const wrongOpt = CHECK[0].o.find(o => !o[1]);
-  await pick(wrongOpt[0]); await clickBtn('Check answer');
-  ok(/Not quite/.test(await fbText()) && !(await page.locator('#btn-nextq').count()), 'wrong checkpoint answer: feedback shown, no progress, retry allowed');
-  const allText = await page.locator('.opt').allInnerTexts();
-  ok(allText.length === 4, 'four options are shown');
-  for (let i = 0; i < CHECK.length; i++) {
-    const right = CHECK[i].o.find(o => o[1]);
-    await pick(right[0]); await clickBtn('Check answer');
-    ok(/Correct/.test(await fbText()), 'checkpoint “' + CHECK[i].k + '”: feedback after the answer');
-    if (i < CHECK.length - 1) await clickBtn('Next question ›');
+  console.log('\n[3] Step 1: tool selection gate and colchicine timeline');
+  ok(await page.locator('#btn-next').isDisabled(), 'Next is disabled until the step is done');
+  ok(await page.locator('.tools-hint').count() === 1, 'the Tools Used panel is hidden until the right tools are chosen');
+  await tools(['Scalpel']); ok(/Not needed here|missing/.test(await fbText()), 'a wrong tool selection is rejected');
+  ok(await page.locator('.tool').count() === 0, 'Tools Used stays hidden after a wrong selection');
+  await page.locator('.tpick[aria-pressed="true"]').first().click();
+  await tools(['Lab coat', 'Gloves', 'Dissection pad']);
+  ok(await page.locator('.tool').count() === 3, 'Tools Used appears after the correct selection');
+  await shot('02-lab7-step1');
+  await single('By its label/record'); await multi(['approved animal-ethics protocol', 'trained, authorised personnel', 'method is the one specified']);
+  await seq(['Check specimen identity', 'Approved humane euthanasia', 'Colchicine pretreatment', 'Confirm death', 'Begin dissection']);   // wrong order
+  ok(/not right yet/.test(await fbText()), 'colchicine placed after euthanasia is rejected');
+  await clickBtn('Clear order');
+  await seq(['Check specimen identity', 'Colchicine pretreatment', 'Approved humane euthanasia', 'Confirm death', 'Begin dissection']);
+  await doneBanner();
+  ok(/4 mg\/kg/.test(await page.locator('.seq-out').innerText()) && /1\.5–2 hours before sacrifice/.test(await page.locator('.seq-out').innerText()), 'colchicine (4 mg/kg, 1.5–2 h before sacrifice) is placed in the timeline');
+  await page.click('#btn-next'); await wait(170);
+
+  console.log('\n[4] Steps 2–9: hindlimb, dissection, bones');
+  await page.click('[data-tab="anatomy"]'); await wait(100);
+  ok(await page.locator('.anat-art [data-region]').count() > 3, 'the Anatomy View has interactive hotspots');
+  await page.locator('.anat-art [data-region="hindlimb"]').first().dispatchEvent('click');
+  ok(/Hindlimb/.test(await page.locator('.region-info').innerText()), 'clicking a hotspot shows what it is');
+  await page.click('[data-tab="procedure"]');
+  await tools(['Dissection pad', 'Gloves']);
+  await region('head'); ok(/head/i.test(await fbText()), 'step 2: a wrong body part is rejected');
+  await page.click('#rot-next'); await page.click('#rot-next');
+  ok(/View 3 of 4/.test(await page.locator('.rot-label').innerText()), 'step 2: the specimen can be rotated');
+  await region('hindlimb'); await region('femur'); await doneBanner(); await page.click('#btn-next'); await wait(170);
+  for (const n of [3, 4, 5]) { await doStep(LAB7, n); await page.click('#btn-next'); await wait(170); }
+  console.log('  — step 6 (femur) and step 7 (tibia) are separate stages');
+  ok((await page.locator('.step-title h2').innerText()).includes('Femur'), 'step 6 is the femur stage');
+  await tools(['Scissors', 'Forceps', 'Gauze', 'Gloves']); await region('tibia'); ok(/tibia/i.test(await fbText()), 'step 6: choosing the tibia as the femur is rejected');
+  await region('femur'); await patches(); await region('femur'); await doneBanner(); await page.click('#btn-next'); await wait(170);
+  ok((await page.locator('.step-title h2').innerText()).includes('Tibia'), 'step 7 is the tibia stage');
+  await doStep(LAB7, 7); await page.click('#btn-next'); await wait(170);
+  await doStep(LAB7, 8); ok(true, 'step 8: both bones cleaned and confirmed'); await page.click('#btn-next'); await wait(170);
+  await doStep(LAB7, 9); await page.click('#btn-next'); await wait(170);
+
+  console.log('\n[5] Step 10: both collection workstations are mandatory');
+  await tools(['Syringe with needle', 'Saline / PBS', 'Labelled collection tubes', 'Gloves']);
+  ok(await page.locator('.workstation[data-ws="femur"]').count() === 1, 'Workstation A (femur) is shown first');
+  await single('Distilled water'); ok(/lyse|burst|Water/i.test(await fbText()), 'wrong flushing solution is rejected');
+  await single('physiological saline'); await seq(['Fill the syringe', 'Place the needle', 'Flush the marrow']); await single('Tibia sample'); ok(/other bone/i.test(await fbText()), 'a wrongly labelled tube is rejected');
+  await single('Femur sample (F)'); await wait(300);
+  ok(await page.locator('.workstation[data-ws="tibia"]').count() === 1 && await page.locator('.done-banner .banner').count() === 0, 'after Workstation A the step is NOT complete — Workstation B (tibia) is required');
+  ok(await page.locator('#btn-next').isDisabled(), 'Next stays disabled with only the femur collected');
+  await single('physiological saline'); await seq(['Fill the syringe', 'Place the needle', 'Flush the marrow']); await single('Tibia sample (T)'); await doneBanner();
+  ok(true, 'Workstation B completes the step'); await shot('03-lab7-step10');
+  await page.click('#btn-next'); await wait(170);
+
+  console.log('\n[6] Step 11: centrifugation protocol conditions');
+  await tools(['Centrifuge', 'Labelled collection tubes', 'Gloves']); await single('To collect the cells'); await single('Capped, with equal volumes');
+  await page.dispatchEvent('.rslot[data-slot="0"]', 'click'); await page.dispatchEvent('.rslot[data-slot="1"]', 'click'); await wait(100);
+  ok(/Unbalanced/.test(await fbText()), 'an unbalanced rotor is refused');
+  await page.dispatchEvent('.rslot[data-slot="3"]', 'click'); await wait(900);
+  await setRange(0, 3000); await setRange(1, 5); await clickBtn('Start centrifuge'); ok(/do not match the protocol/.test(await fbText()), 'wrong speed is rejected');
+  await setRange(0, 2000); await setRange(1, 5); await clickBtn('Start centrifuge');
+  await page.waitForSelector('.hit-pel', { timeout: 6000 }); await page.click('.hit-sup'); ok(/supernatant/.test(await fbText()), 'clicking the supernatant is explained'); await page.click('.hit-pel'); await wait(150);
+  await single('Remove it gently'); await single('The pellet holds the marrow cells'); await doneBanner(); await page.click('#btn-next'); await wait(170);
+
+  console.log('\n[7] Step 12, checkpoint and Lab 7 completion; progress is saved');
+  await doStep(LAB7, 12);
+  ok(/Go to Checkpoint/.test(await page.locator('#btn-next').innerText()), 'step 12 leads to the final checkpoint');
+  await page.reload(); await ev(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(250);
+  ok((await hash()) === '#/lab7/12' || /lab7/.test(await hash()), 'reloading keeps the position'); await go('#/lab7/13'); await wait(200);
+  ok(await page.locator('.cp-progress').count() === 1, 'the final checkpoint opens after step 12');
+  ok((await state()).guided.lab7.checkpoint.picked.length === 6, 'six checkpoint questions are drawn from the pool');
+  await go('#/lab8'); ok((await hash()) === '#/home', 'Lab 8 is still locked before the checkpoint is done');
+  await go('#/lab7/13'); await checkpointRun(false); await page.waitForSelector('#btn-finish7');
+  await shot('04-lab7-checkpoint-done');
+  await page.click('#btn-finish7'); await wait(250);
+  const d7 = await page.locator('.done-screen').innerText();
+  ok((await hash()) === '#/lab7/done' && /Lab 7 Completed – Bone Marrow Collection/.test(d7), 'completion screen: “Lab 7 Completed – Bone Marrow Collection”');
+  ok(/You have completed Lab 7\. Your bone marrow preparation is ready for the next stage\./.test(d7), 'the required completion message is shown');
+  ok(/Return to Home/.test(d7) && /Continue to Lab 8/.test(d7), 'Return to Home and Continue to Lab 8 are offered');
+  ok(/Anatomical identification/.test(d7) && /Femur isolation/.test(d7) && /Tibia isolation/.test(d7) && /Centrifugation/.test(d7), 'the Lab 7 report lists the score categories');
+  ok((await state()).guided.lab7.steps[12].done === true && Object.keys((await state()).guided.lab7.steps).length === 12, 'all 12 steps are saved');
+  await shot('05-lab7-complete');
+
+  console.log('\n[8] Leave and return: Lab 8 is unlocked and progress is preserved');
+  await page.click('#btn-return-home'); await wait(150);
+  await page.reload(); await ev(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(250);
+  ok((await page.locator('#btn-lab8').innerText()).includes('Start Lab 8') && await page.locator('#btn-lab8').getAttribute('aria-disabled') === null, 'after reload Lab 8 is unlocked');
+  ok(await page.locator('#btn-exam-lab7').getAttribute('aria-disabled') === null, 'the Lab 7 examination is now available');
+  ok(await page.locator('#btn-exam-lab8').getAttribute('aria-disabled') === 'true', 'the Lab 8 examination is still locked');
+  await go('#/lab7/done'); ok(/Lab 7 Completed/.test(await page.locator('.done-screen').innerText()), 'Lab 7 completion remains available');
+  await page.click('#btn-continue8'); await wait(200);
+  ok((await hash()) === '#/lab8', 'Continue to Lab 8 opens the Lab 8 intro');
+  ok((await page.locator('.intro h1').innerText()) === 'Virtual Lab 8 – Chromosome Preparation and Karyotyping' && (await page.locator('.intro .lead').innerText()) === 'Continue from your bone marrow preparation and learn how to identify and arrange rat chromosomes into a karyogram.', 'Lab 8 title and subtitle are exact');
+  ok(/Recap of Lab 7/i.test(await page.locator('.recap').innerText()) && /bone marrow suspension/.test(await page.locator('.recap').innerText()), 'Lab 8 recaps Lab 7 and starts from the bone marrow suspension');
+  await shot('06-lab8-intro');
+
+  console.log('\n[9] Tampering cannot unlock Lab 8');
+  const tamp = await ev(() => { const k = 'msa-karyo-lab-v2', raw = JSON.parse(localStorage.getItem(k)); raw.guided.lab7.steps[12] = { done: false }; localStorage.setItem(k, JSON.stringify(raw)); return true; });
+  await page.reload(); await ev(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(250);
+  ok(await page.locator('#btn-lab8').getAttribute('aria-disabled') === 'true', 'editing saved data (bad signature) re-locks Lab 8');
+  ok(/could not be verified|cleared|Locked/.test(await page.locator('.notice, #btn-lab8').first().innerText()), 'the user is told the data failed verification');
+  ok(await ev(() => { try { KL.Store.assertLab8(); return false; } catch (e) { return /locked/i.test(e.message); } }), 'Store.assertLab8() throws while Lab 7 is incomplete');
+  ok(await ev(() => { try { KL.Store.markStep('lab8', 1, 1, 'x'); return false; } catch (e) { return true; } }), 'writing Lab 8 progress directly is refused');
+
+  /* rebuild a legitimate state quickly for the remaining tests: run Lab 7 again */
+  console.log('\n[10] Re-complete Lab 7 (second run), then Lab 8 end to end');
+  await go('#/home'); await page.click('#btn-lab7'); await page.click('#btn-start'); await wait(200);
+  await lab7All(false); await page.click('#btn-finish7'); await wait(250);
+  ok(await ev(() => KL.Store.lab7Complete()), 'Lab 7 completed again');
+  await page.click('#btn-continue8'); await wait(150); await page.click('#btn-start'); await wait(200);
+  ok((await hash()) === '#/lab8/1' && await page.locator('.tnode').count() === 15, 'Lab 8 has 15 steps');
+  for (let n = 1; n <= 15; n++) {
+    await doStep(LAB8, n);
+    if (n === 6) { ok(true, 'step 6: drops, safety checks and the spreading simulation'); }
+    if (n === 9) { ok(!!(await state()).guided.lab8.spread, 'step 9: a suitable metaphase was selected on the virtual microscope'); await shot('07-lab8-microscope'); }
+    if (n === 12) { ok(/Karyogram correct/.test(await page.locator('.kres').innerText()), 'step 12: the karyogram built by the student is accepted'); await shot('08-lab8-karyogram'); }
+    if (n < 15) { await page.click('#btn-next'); await wait(170); }
   }
-  await page.click('#btn-finish7'); await wait(200);
-  ok((await hash()) === '#/lab7/done' && /Lab 7 complete/.test(await page.locator('.done-screen h1').innerText()), 'Lab 7 completion screen appears');
-  ok(/summary of procedures completed/i.test(await page.locator('.done-screen').innerText()) && /checkpoint results/i.test(await page.locator('.done-screen').innerText()), 'summary shows procedures and checkpoint results');
-  ok(!(await page.locator('#btn-continue8').isDisabled()) && await page.locator('#btn-save-exit').count() === 1, '“Save and Exit” and “Continue to Lab 8” are available after completion');
-  await shot('02-lab7-complete');
-  await page.click('#btn-save-exit'); await wait(150);
-  ok(/Progress saved/.test(await page.locator('.done-screen h1').innerText()), 'Save and Exit confirms the progress is stored');
-
-  console.log('\n[4] Lab 7 progress persists after closing and reopening');
-  const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 1000 } });  // fresh browser profile: nothing carried over
-  const blank = await ctx2.newPage(); await blank.goto(URL); await blank.waitForSelector('#view *');
-  ok((await blank.locator('#btn-lab8').getAttribute('aria-disabled')) === 'true', 'a different profile starts locked (progress is per browser)');
-  await blank.close(); await ctx2.close();
-  const old = page; page = await ctx.newPage(); await openPage(page); await old.close();   // same profile, “reopened”
-  ok(await ev(() => KL.Store.lab7Complete()), 'Lab 7 is still complete after reopening');
-  ok((await page.locator('.stage-card').first().innerText()).includes('Completed') && /Review Lab 7/.test(await page.locator('#btn-lab7').innerText()), 'home shows Lab 7 as completed');
-  const s2 = await state();
-  ok(s2.lab7.checkpoint.passed && s2.lab7.steps[12].score > 0 && Object.keys(s2.lab7.steps).length === 17, 'step scores and checkpoint results are preserved');
-  await page.click('#btn-lab7'); await wait(150);
-  ok(/Step complete/.test(await page.locator('.done-banner').innerText()), 'revisiting a completed step shows its result without losing progress');
-  await page.click('.done-banner .btn'); await wait(100);
-  ok(await page.locator('.seq-item').count() === 4 && (await state()).lab7.steps[1].done, '“Practice again” re-opens the task and keeps the saved result');
-
-  console.log('\n[5] Lab 8 unlocks after Lab 7');
-  await page.click('#nav-home'); await wait(150);
-  ok((await page.locator('#btn-lab8').getAttribute('aria-disabled')) === null && /Start Lab 8/.test(await page.locator('#btn-lab8').innerText()), 'Lab 8 is now unlocked');
-  await page.click('#btn-lab8'); await wait(200);
-  ok((await hash()) === '#/lab8/1' && /Prepare the Slide/.test(await page.locator('.step-title h2').innerText()), 'Lab 8 step 1 opens');
-  ok((await page.locator('.stepbtn').count()) === 10, 'sidebar lists the 10 Lab 8 steps');
-
-  console.log('\n[6] Students can resume Lab 8 without repeating Lab 7');
-  await pick('A clean slide kept in cold 70% ethanol at 4 °C'); await clickBtn('Check answer'); await next();
-  await clickBtn('💧 Add a drop'); await clickBtn('Confirm');
-  ok(/Too little/.test(await fbText()), 'one drop is rejected with an explanation');
-  await clickBtn('💧 Add a drop'); await clickBtn('Confirm'); await next();
-  await page.reload(); await page.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(250);
-  ok((await hash()) === '#/lab8/3' || await page.locator('.step-num').first().innerText().then(t => t === '3'), 'reopening resumes at Lab 8 step 3 (' + await hash() + ')');
-  ok((await state()).lab7.checkpoint.passed && (await state()).lab8.steps[2].done, 'Lab 7 is not repeated; Lab 8 steps 1–2 remain saved');
-  console.log('  — step 3: flame/alcohol safety overlay, then the spreading simulation');
-  await page.locator('.opt').filter({ hasText: 'Pour a little alcohol on the flame' }).locator('input').check(); await clickBtn('Check selection');
-  ok(/Safety \/ ethics issue/.test(await fbText()), 'unsafe flame/alcohol choice flagged as a safety issue');
-  await page.locator('.opt input:checked').uncheck();
-  for (const t of ['Work only under trained supervision in an approved laboratory', 'Keep alcohol and fixative containers closed and well away from the flame', 'Wear lab coat, gloves and goggles; tie back long hair and secure loose sleeves', 'Know where the fire extinguisher, fire blanket and exit are']) await pick(t);
-  await clickBtn('Check selection'); await clickBtn('Start simulated spreading'); await doneBanner(); await shot('03-lab8-spreading'); await page.click('#btn-next'); await wait(150);
-  await pick('Giemsa working solution at 10%'); await clickBtn('Check answer'); await clickBtn('Start staining'); await doneBanner(); await page.click('#btn-next'); await wait(150);
-  await pick('Gently with distilled water'); await clickBtn('Check answer'); await pick('Air-dry on filter paper'); await clickBtn('Check answer'); await next();
-
-  console.log('\n[7] Microscope, then the karyotype workspace accepts arrangement interactions');
-  // wrong choices first
-  await clickBtn('Use this spread for karyotyping'); ok(/40× objective/.test(await fbText()), 'selecting a spread at 4× is refused: 40× is required');
-  await clickBtn('40×'); await clickBtn('Use this spread for karyotyping'); ok(/no cell in this field/i.test(await fbText()), 'an empty field is rejected');
-  const mv = async d => { await page.click('[aria-label="Move stage ' + d + '"]'); await wait(40); };
-  await mv('←'); await clickBtn('Use this spread for karyotyping');
-  ok(/interphase/i.test(await fbText()), 'interphase nuclei are rejected (not a metaphase)');
-  await mv('→'); await mv('→'); await mv('↑'); await clickBtn('Use this spread for karyotyping'); ok(/overlap/i.test(await fbText()), 'an overlapping metaphase is rejected');
-  await mv('↓'); await mv('↓'); await clickBtn('Use this spread for karyotyping'); ok(/incomplete/i.test(await fbText()), 'an incomplete metaphase is rejected');
-  // count tool
-  await page.locator('.count input[type=checkbox]').check(); await wait(100);
-  await mv('←'); await wait(100);
-  const nch = await page.locator('.scope-svg .sp-chr').count(); ok(nch === 42, 'the well-spread cell shows all 42 chromosomes (' + nch + ')');
-  await page.locator('.scope-svg .sp-chr').nth(0).dispatchEvent('click'); await page.locator('.scope-svg .sp-chr').nth(1).dispatchEvent('click');
-  ok((await page.locator('.tally').innerText()) === 'Marked: 2', 'the count tool marks chromosomes');
-  await shot('04-microscope-40x');
-  await clickBtn('Use this spread for karyotyping'); await doneBanner(); await page.click('#btn-next'); await wait(200);
-  ok((await state()).lab8.spread.variant === 'good', 'the complete, well-spread metaphase is accepted and stored');
-
-  // karyotype
-  ok(await page.locator('.ktray .chr.tray').count() === 42, 'all 42 chromosomes start in the tray (nothing is pre-arranged)');
-  const tilesRot = await ev(() => Object.values(KL.Store.get().lab8.karyotype.chr).filter(c => c.rot !== 0).length);
-  ok(tilesRot > 5 && tilesRot < 37, 'chromosomes start in mixed orientations (' + tilesRot + ' upside down)');
-  await clickBtn('Check karyotype'); ok(/still in the tray/.test(await page.locator('.kres').innerText()), 'checking an empty karyotype reports the unplaced chromosomes');
-  // wrong pairing: two non-homologues in one slot
-  const info = await ev(() => ({ slots: KL.KARYO.slots, chroms: KL.KARYO.chroms }));
-  const slotOf = pair => info.slots.find(s => s.key === (pair === 'X' || pair === 'Y' ? 'XY' : pair)).index;
-  await page.click('.chr.tray[data-id="1a"]'); await page.click('.kslot[data-slot="0"] .kslot-h'); await page.click('.chr.tray[data-id="4a"]'); await page.click('.kslot[data-slot="0"] .kslot-h');
-  await clickBtn('Check karyotype'); ok(/not homologous/.test(await page.locator('.kres').innerText()), 'non-homologous chromosomes in one slot are flagged');
-  // a third chromosome cannot join a full slot
-  await page.click('.chr.tray[data-id="2a"]'); await page.click('.kslot[data-slot="0"] .kslot-h'); ok(await page.locator('.kslot[data-slot="0"] .chr').count() === 2, 'a slot holds at most two chromosomes');
-  // correct placement by tap-select, with pointer drag for two chromosomes
-  await page.click('.chr[data-id="4a"]'); await page.click('.ktray-h'); await wait(80);
-  ok(await page.locator('.ktray .chr.tray[data-id="4a"]').count() === 1, 'tap a placed chromosome, tap the tray: it returns');
-  await page.click('.chr[data-id="1a"]'); await page.click('.ktray-h'); await page.click('.chr[data-id="2a"]'); await page.click('.ktray-h');
-  // pointer drag of one chromosome into slot 0
-  const from = await page.locator('.chr.tray[data-id="1a"]').boundingBox(), to = await page.locator('.kslot[data-slot="0"] .kslot-in').boundingBox();
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down(); await page.mouse.move(from.x + 30, from.y + 20, { steps: 3 }); await page.mouse.move(to.x + 40, to.y + 70, { steps: 8 }); await page.mouse.up(); await wait(120);
-  ok((await ev(() => KL.Store.get().lab8.karyotype.chr['1a'].slot)) === 0, 'drag-and-drop places a chromosome in a slot');
-  // arrange all
-  const placed = [];
-  for (const c of info.chroms) { if (c.id === '1a') continue; await page.click('.chr.tray[data-id="' + c.id + '"]'); await page.click('.kslot[data-slot="' + slotOf(c.pair) + '"] .kslot-h'); }
-  ok(await page.locator('.ktray .chr.tray').count() === 0, 'all chromosomes placed');
-  // orientation + rotate via button and key
-  let K = await ev(() => JSON.parse(JSON.stringify(KL.Store.get().lab8.karyotype)));
-  const upside = info.chroms.filter(c => K.chr[c.id].rot !== 0);
-  await clickBtn('Check karyotype');
-  ok(/upside down/.test(await page.locator('.kres').innerText()) && /not aligned/.test(await page.locator('.kres').innerText()) && /label/.test(await page.locator('.kres').innerText()), 'the check reports orientation, alignment and labelling problems separately');
-  const u0 = upside[0]; await page.click('.chr[data-id="' + u0.id + '"]'); await page.click('[data-k="rot"]');
-  ok((await ev((id) => KL.Store.get().lab8.karyotype.chr[id].rot, u0.id)) === 0, 'Rotate turns a chromosome upright');
-  const u1 = upside[1]; await page.click('.chr[data-id="' + u1.id + '"]'); await page.keyboard.press('r');
-  ok((await ev((id) => KL.Store.get().lab8.karyotype.chr[id].rot, u1.id)) === 0, 'the R key rotates the selected chromosome');
-  for (const c of upside.slice(2)) { await page.click('.chr[data-id="' + c.id + '"]'); await page.click('[data-k="rot"]'); }
-  // alignment: arrow nudge and vertical drag, then the row assist for the rest
-  const a0 = info.chroms[0]; await page.click('.chr[data-id="' + a0.id + '"]');
-  const dy0 = await ev(id => KL.Store.get().lab8.karyotype.chr[id].dy, a0.id);
-  await page.click('[data-k="' + (dy0 > 0 ? 'up' : 'down') + '"]');
-  const dy1 = await ev(id => KL.Store.get().lab8.karyotype.chr[id].dy, a0.id);
-  ok(Math.abs(dy1) < Math.abs(dy0), 'arrow buttons nudge a chromosome toward the centromere line');
-  const a1 = info.chroms[2]; const dyA = await ev(id => KL.Store.get().lab8.karyotype.chr[id].dy, a1.id);
-  const bb = await page.locator('.chr[data-id="' + a1.id + '"]').boundingBox();
-  const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-  await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx, cy - dyA / 2, { steps: 4 }); await page.mouse.move(cx, cy - dyA, { steps: 4 }); await page.mouse.up(); await wait(120);
-  const dyB = await ev(id => KL.Store.get().lab8.karyotype.chr[id].dy, a1.id);
-  ok(Math.abs(dyB) < Math.abs(dyA) || Math.abs(dyB) <= 3, 'dragging vertically inside a slot aligns the chromosome (' + dyA + ' → ' + dyB + ')');
-  for (let r = 0; r < 4; r++) await page.click('[data-assist="' + r + '"]');
-  // labels
-  await clickBtn('Check karyotype'); ok(/label/.test(await page.locator('.kres').innerText()) && !/not aligned/.test(await page.locator('.kres').innerText()) && !/upside/.test(await page.locator('.kres').innerText()), 'after rotating and aligning, only the labels remain');
-  for (const s of info.slots) await page.fill('.klabel[data-slot="' + s.index + '"]', s.key === 'XY' ? 'X Y' : s.key);
-  // a wrong label is caught
-  await page.fill('.klabel[data-slot="3"]', '9'); await clickBtn('Check karyotype');
-  ok(/label/.test(await page.locator('.kres').innerText()) && await page.locator('.kslot.badlabel').count() === 1, 'a wrong pair number is flagged on that slot only');
-  await page.fill('.klabel[data-slot="3"]', '4');
-  await shot('05-karyotype-before-final-check');
-  // persistence of partial work
-  await page.reload(); await page.evaluate(() => { KL.CONFIG.sim.secondsPerRealSecond = 300; }); await wait(250);
-  ok(await page.locator('.kslot .chr').count() === 42 && (await page.locator('.klabel[data-slot="3"]').inputValue()) === '4', 'the arrangement and labels are restored after reloading');
-  await clickBtn('Check karyotype'); await doneBanner();
-  ok(/Karyotype correct/.test(await page.locator('.kres').innerText()), 'the correct karyotype is accepted (rows, order, orientation, alignment, labels)');
-  await shot('06-karyotype-complete');
-  // reset requires confirmation, cancel keeps the work
-  await clickBtn('Reset arrangement'); await page.locator('.modal button').filter({ hasText: 'Cancel' }).click(); await wait(80);
-  ok(await page.locator('.kslot .chr').count() === 42, 'cancelling the arrangement reset keeps the karyotype');
-  await page.click('#btn-next'); await wait(200);
-
-  console.log('\n[8] Calculations produce mathematically correct results');
-  const calcs = await ev(() => { const out = {}; KL.CONFIG.measure.requiredPairs.forEach(id => { const [a, b] = KL.KARYO.chroms.filter(c => c.pair === id); const v = { La: a.L, Sa: a.S, Lb: b.L, Sb: b.S }; out[id] = { v, e: KL.Measure.expected(v, KL.KARYO.haploidTotal) }; }); return out; });
-  // marker readout
-  const mb = await page.locator('.meas-svg').boundingBox();
-  await page.mouse.move(mb.x + 150, mb.y + 24 / 4.4 * 0 + mb.height * 0.2); await page.mouse.down(); await page.mouse.move(mb.x + 150, mb.y + mb.height * 0.3); await page.mouse.up(); await wait(80);
-  ok(parseFloat(await page.locator('#mk-val').innerText()) > 0, 'dragging the marker updates the scale reading');
-  // wrong measurement
-  await page.fill('[data-m="La"]', '9.5'); await page.fill('[data-m="Sa"]', String(calcs['1'].v.Sa)); await page.fill('[data-m="Lb"]', String(calcs['1'].v.Lb)); await page.fill('[data-m="Sb"]', String(calcs['1'].v.Sb)); await clickBtn('Check measurements');
-  ok(/too long/.test(await page.locator('.mfb').innerText()) && await page.locator('.mf.bad').count() === 1, 'a wrong reading is flagged (field marked, direction given, no answer revealed)');
-  ok(!/6\.6/.test(await page.locator('.mfb').innerText()), 'the correct length is not displayed in the feedback');
-  for (const id of ['1', '3', '4', '13', '14', '20']) {
-    await page.click('.pbtn[data-pair="' + id + '"]'); await wait(60);
-    const { v, e } = calcs[id];
-    for (const k of ['La', 'Sa', 'Lb', 'Sb']) await page.fill('[data-m="' + k + '"]', String(v[k]));
-    await clickBtn('Check measurements');
-    // wrong calculation first for the first pair, and a numeric AR for the telocentric pair
-    if (id === '1') {
-      await page.fill('[data-c="avgL"]', String(e.avgL)); await page.fill('[data-c="avgS"]', String(e.avgS)); await page.fill('[data-c="ar"]', String((e.avgS / e.avgL).toFixed(2))); await page.fill('[data-c="ci"]', String(e.ci.toFixed(1))); await page.fill('[data-c="rl"]', String(e.rl.toFixed(2)));
-      await clickBtn('Check calculations'); ok(/Arm ratio = average long arm ÷ average short arm/.test(await page.locator('.mfb').innerText()), 'inverted AR gives a stepwise hint');
-    }
-    if (id === '4') {
-      await page.fill('[data-c="avgL"]', e.avgL.toFixed(2)); await page.fill('[data-c="avgS"]', '0'); await page.fill('[data-c="ar"]', '0'); await page.fill('[data-c="ci"]', '100'); await page.fill('[data-c="rl"]', e.rl.toFixed(2));
-      await clickBtn('Check calculations'); ok(/dividing by zero|undefined/.test(await page.locator('.mfb').innerText()), 'telocentric: a numeric AR is rejected (division by zero is undefined)');
-    }
-    await page.fill('[data-c="avgL"]', e.avgL.toFixed(2)); await page.fill('[data-c="avgS"]', e.avgS.toFixed(2));
-    await page.fill('[data-c="ar"]', e.telo ? 'n/a' : e.ar.toFixed(2)); await page.fill('[data-c="ci"]', e.ci.toFixed(1)); await page.fill('[data-c="rl"]', e.rl.toFixed(2));
-    await clickBtn('Check calculations');
-    if (id === '1') { ok(await ev(() => KL.Store.get().lab8.measure['1'].calcOk), 'pair 1: AR ' + e.ar.toFixed(2) + ', CI ' + e.ci.toFixed(1) + '%, RL ' + e.rl.toFixed(2) + '% accepted'); await shot('07-measure'); }
-  }
-  const expectChk = await ev(() => ({ ar: 6.6 / 3.0, ci: 6.6 / 9.6 * 100, rl: 9.6 / KL.KARYO.haploidTotal * 100 }));
-  ok(Math.abs(expectChk.ar - 2.2) < 1e-9 && Math.abs(expectChk.ci - 68.75) < 1e-9 && Math.abs(expectChk.rl - 7.8850) < 1e-3, 'independent check: pair 1 AR 2.20, CI 68.75 %, RL 7.885 %');
-  await doneBanner(); ok(await ev(() => KL.CONFIG.measure.requiredPairs.every(id => KL.Store.get().lab8.measure[id].calcOk)), 'all required pairs measured and calculated');
-  await page.click('#btn-next'); await wait(200);
-
-  console.log('\n[9] Morphological classification');
-  await page.selectOption('[data-cls="1"]', 'Metacentric'); for (const id of ['3', '4', '13', '14', '20']) await page.selectOption('[data-cls="' + id + '"]', 'Metacentric');
-  await clickBtn('Check classification'); ok(/need.* another look|needs another look/.test(await page.locator('.mfb').innerText()), 'wrong classifications are explained without revealing the answers');
-  const want = await ev(() => { const o = {}; KL.CONFIG.measure.requiredPairs.forEach(id => { const r = KL.Store.get().lab8.measure[id].res; o[id] = KL.Calc.classify(r.avgL, r.avgS).cls; }); return o; });
-  for (const id of Object.keys(want)) await page.selectOption('[data-cls="' + id + '"]', want[id]);
-  await clickBtn('Check classification'); await doneBanner();
-  ok(['Metacentric', 'Submetacentric', 'Acrocentric', 'Telocentric'].every(c => Object.values(want).includes(c)), 'the measured set covers all four classes (' + Object.values(want).join(', ') + ')');
-  ok(want['4'] === 'Telocentric' && want['1'] === 'Submetacentric' && want['3'] === 'Acrocentric' && want['14'] === 'Metacentric', 'pairs 4, 1, 3 and 14 classify as telocentric, submetacentric, acrocentric, metacentric');
-  await page.click('#btn-next'); await wait(200);
-
-  console.log('\n[10] Final analysis and Lab 8 completion');
-  ok(await page.locator('.final-kar .kslot').count() === 21 && /measurements, calculations and classification/i.test(await page.locator('.details').first().evaluate(() => document.body.innerText)), 'the final analysis shows the karyotype, measurements and classifications');
-  await shot('08-final-analysis');
-  await clickBtn('Finish Lab 8'); await doneBanner(); await page.click('#btn-next'); await wait(200);
-  ok((await hash()) === '#/lab8/done' && /Lab 8 complete/.test(await page.locator('.done-screen h1').innerText()), 'Lab 8 completion summary appears');
-  ok((await state()).lab8.finished === true && Object.keys((await state()).lab8.steps).length === 10, 'all 10 Lab 8 steps are recorded');
+  ok(/Karyogram submitted/.test(await page.locator('.kres').innerText()), 'step 15: the karyogram is submitted for evaluation');
+  await page.click('#btn-next'); await wait(250);
+  ok((await hash()) === '#/lab8/done' && /Lab 8 Completed/.test(await page.locator('.done-screen h1').innerText()), 'Lab 8 completion screen');
+  const d8 = await page.locator('.done-screen').innerText();
+  ok(/Reagent identification/.test(d8) && /Chromosome pairing/.test(d8) && /Karyotyping/.test(d8) && /Metaphase identification/.test(d8), 'the Lab 8 report lists the score categories');
+  ok((await state()).guided.lab8.finished === true, 'Lab 8 is marked finished');
   await shot('09-lab8-complete');
 
-  console.log('\n[11] Reset progress requires confirmation');
-  await page.click('#nav-home'); await wait(150);
-  await page.click('#btn-reset'); await wait(100);
-  ok(await page.locator('.modal-backdrop').count() === 1 && /reset all progress/i.test(await page.locator('.modal h2').innerText()), 'a confirmation dialog appears');
-  await page.locator('.modal button').filter({ hasText: 'Cancel' }).click(); await wait(100);
-  ok(await ev(() => KL.Store.lab7Complete()), 'cancelling keeps all progress');
-  await page.click('#btn-reset'); await page.locator('.modal button').filter({ hasText: 'Reset progress' }).click(); await wait(250);
-  ok(!(await ev(() => KL.Store.lab7Complete())) && (await page.locator('#btn-lab8').getAttribute('aria-disabled')) === 'true' && Object.keys((await state()).lab7.steps).length === 0, 'confirming erases progress and re-locks Lab 8');
+  console.log('\n[11] Wrong actions cost marks (no full marks for just reaching the end)');
+  const rep = await ev(() => KL.Report.build('lab7', 'guided', KL.App.defs));
+  ok(rep.cats.length === 8 && rep.rows.length === 12 && rep.total <= 100, 'the guided report has 8 categories and 12 stage scores (' + rep.total + '%)');
+  const sOK = await ev(() => KL.Store.scores('lab7', 'guided').pct);
+  ok(sOK > 0, 'the guided score is computed from recorded attempts (' + sOK + '%)');
 
-  console.log('\n[12] The application remains usable on smaller screens');
-  for (const [w, hgt] of [[820, 1180], [600, 900]]) {
-    await page.setViewportSize({ width: w, height: hgt });
-    await page.evaluate(() => { location.hash = '#/home'; }); await wait(150);
-    ok(await noOverflow(), w + 'px: home has no horizontal overflow');
-    await page.click('#btn-lab7'); await wait(200);
-    ok(await noOverflow(), w + 'px: step view has no horizontal overflow');
-    ok(await page.locator('#btn-next').isVisible() && await page.locator('.tab').first().isVisible(), w + 'px: tabs and navigation are reachable');
-    await page.click('#nav-home'); await wait(100);
+  console.log('\n[12] Practical Examination (Lab 7)');
+  await go('#/home'); await page.click('#btn-exam-lab7'); await wait(200);
+  ok((await hash()) === '#/exam/lab7' && /Practical Examination/.test(await page.locator('.intro h1').innerText()), 'exam intro opens');
+  await go('#/exam/lab7/1'); ok((await hash()) === '#/exam/lab7', 'examination steps cannot be opened before it is started');
+  await page.click('#btn-start-exam'); await wait(250);
+  const seed1 = (await state()).exam.lab7.seed;
+  ok((await hash()) === '#/exam/lab7/1' && seed1 > 0, 'starting the examination creates a random seed');
+  ok(await page.locator('.tab').count() === 1 && await page.locator('.side-col').count() === 0 && await page.locator('.details').count() === 0, 'no hints: Key Points, anatomy tab, reference panels and procedure notes are hidden');
+  ok(await page.locator('.mode-badge.exam').count() >= 1, 'the Practical Examination mode badge is shown');
+  await tools(['Scalpel']); ok(/Response recorded/.test(await fbText()) && !/Not needed/.test(await fbText()), 'exam feedback is neutral — it does not reveal correctness');
+  await tools(['Gloves']); await page.locator('.tpick[aria-pressed="true"]').first().click().catch(() => { });
+  await tools(['Gloves', 'Dissection pad']);   // wrong again (3rd error) -> stage ends
+  await wait(300);
+  ok(await page.locator('.banner.fail').count() === 1 && /incomplete/.test(await page.locator('.banner.fail').innerText()), 'after the maximum incorrect actions the stage is ended and marked incomplete');
+  ok((await state()).exam.lab7.steps[1].failed === true && (await state()).exam.lab7.steps[1].score === 0, 'the failed stage scores zero');
+  await page.click('#btn-after-fail'); await wait(200);
+  for (let n = 2; n <= 12; n++) { await doStep(LAB7, n); await page.click('#btn-next'); await wait(170); }
+  await checkpointRun(true); await page.waitForSelector('#btn-finish7', { timeout: 6000 });
+  await page.click('#btn-finish7'); await wait(250);
+  const ex7 = await page.locator('.done-screen').innerText();
+  ok((await hash()) === '#/exam/lab7/done' && /Examination — Report/.test(ex7), 'examination report appears');
+  ok(/Missed steps/i.test(ex7) && /Step 1/i.test(ex7) && /Areas for revision/i.test(ex7) && /Recommendations/i.test(ex7) && /Incorrect actions/i.test(ex7), 'report shows incorrect actions, missed steps, revision areas and recommendations');
+  const tot = await ev(() => KL.Report.build('lab7', 'exam', KL.App.defs).total);
+  ok(tot > 0 && tot < 100, 'the exam score is below 100% because of the failed stage (' + tot + '%)');
+  ok((await state()).history.some(h => h.stage === 'lab7'), 'the exam result is stored in the history');
+  await shot('10-exam-report');
+  // retake: new seed → randomised
+  await page.click('#btn-retake'); await wait(150); await page.click('#btn-start-exam'); await wait(200);
+  const seed2 = (await state()).exam.lab7.seed;
+  ok(seed2 !== seed1 && (await state()).exam.lab7.steps[1] === undefined, 'a retake starts clean with a different random seed (randomised content)');
+
+  console.log('\n[13] Practical Examination (Lab 8)');
+  await go('#/home'); ok(await page.locator('#btn-exam-lab8').getAttribute('aria-disabled') === null, 'the Lab 8 examination is available once the guided Lab 8 is complete');
+  await go('#/exam/lab8'); await page.click('#btn-start-exam'); await wait(250);
+  for (let n = 1; n <= 15; n++) { await doStep(LAB8, n); if (n < 15) { await page.click('#btn-next'); await wait(170); } }
+  await page.click('#btn-next'); await wait(250);
+  ok((await hash()) === '#/exam/lab8/done' && /Examination — Report/.test(await page.locator('.done-screen h1').innerText()), 'Lab 8 examination (randomised fields/questions) completes with a report');
+  ok((await state()).exam.lab8.finished === true, 'Lab 8 exam recorded as finished');
+
+  console.log('\n[14] Responsive layouts');
+  await go('#/home'); await page.click('#btn-lab7'); await page.click('#btn-start'); await wait(200);
+  for (const [w, hgt, nm] of [[820, 1100, 'tablet'], [390, 844, 'phone']]) {
+    await page.setViewportSize({ width: w, height: hgt }); await wait(200);
+    ok(await noOverflow(), nm + ' (' + w + 'px): Lab 7 step has no horizontal overflow');
+    await shot('11-' + nm + '-lab7');
   }
-  // karyotype on a tablet: seed a completed Lab 7 through the store (legitimate state) and open Lab 8 step 7
-  await page.setViewportSize({ width: 820, height: 1180 });
-  await ev(() => { for (let i = 1; i <= 17; i++) KL.Store.markStep('lab7', i, 1, 'test'); const s = KL.Store.get(); s.lab7.checkpoint.passed = true; KL.Store.save(); [1, 2, 3, 4, 5, 6].forEach(i => KL.Store.markStep('lab8', i, 1, 'test')); KL.Store.get().lab8.spread = { variant: 'good', seed: 31 }; KL.Store.save(); });
-  await page.evaluate(() => { location.hash = '#/lab8/7'; }); await wait(300);
-  ok(/Arrange the Karyotype/.test(await page.locator('.step-title h2').innerText()) && await noOverflow(), '820px: the karyotype workspace opens without horizontal page overflow');
-  await page.click('.chr.tray >> nth=0'); await page.click('.kslot[data-slot="0"] .kslot-h'); await wait(80);
-  ok(await page.locator('.kslot .chr').count() === 1, '820px: tap-to-place works on a tablet-sized screen');
-  await shot('10-tablet-karyotype');
+  await go('#/lab8/9'); await wait(200);
+  ok(await noOverflow(), 'phone: the Lab 8 virtual microscope fits'); await shot('12-phone-lab8');
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
-  ok(errors.length === 0, 'no JavaScript errors during the whole run' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
-  console.log('\n' + passes + ' passed, ' + failures + ' failed');
+  console.log('\n[15] Console errors');
+  ok(errors.length === 0, 'no page or console errors' + (errors.length ? ': ' + errors.slice(0, 4).join(' | ') : ''));
+
   await browser.close();
+  console.log('\n' + passes + ' passed, ' + failures + ' failed');
   process.exit(failures ? 1 : 0);
-})().catch(e => { console.error('TEST CRASH', e); process.exit(2); });
+})().catch(e => { console.error(e); process.exit(1); });

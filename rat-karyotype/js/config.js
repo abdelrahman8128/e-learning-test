@@ -6,9 +6,8 @@ window.KL = window.KL || {};
 
 KL.CONFIG = {
   /* ---------- Lab 7 protocol parameters (from the supplied course protocol) ---------- */
-  // The colchicine dose and timing were NOT supplied with the protocol: they are shown as
-  // "per course protocol" and never simulated. Put the values from your manual here if wanted.
-  colchicine: { dose: null, timing: null },
+  // Instructor-verified protocol information (supplied for this project).
+  colchicine: { dose: '4 mg/kg', timing: 'about 1.5–2 hours before sacrifice', verified: 'Instructor-verified protocol information' },
   saline: { volumeMl: 3, label: '0.9% NaCl (physiological saline) or PBS' },
   spin: { rpm: 2000, minutes: 5 },
   kcl: { volumeMl: 3, molarity: '0.075 M' },
@@ -25,6 +24,11 @@ KL.CONFIG = {
 
   /* ---------- Simulation settings ---------- */
   sim: { secondsPerRealSecond: 30 },         // accelerated clock for incubation / standing / staining
+  exam: { maxErrors: 3, errPenalty: 0.25, safetyPenalty: 0.15 },   // Practical Examination: errors allowed per step, score penalties
+  guidedPenalty: { err: 0.15, safety: 0.1 },
+  /** Photographs: map a key to a file under photoDir and it replaces the drawn illustration. Keys: 'lab7-3-close', 'lab7-3-ref', 'lab7-3-anat' … */
+  photoDir: 'assets/photos/',
+  photos: {},
   measure: {
     tolerance: 0.2,                           // accepted reading error (simulated µm) for arm lengths
     calcTol: { avg: 0.06, ar: 0.06, ci: 0.6, rl: 0.15 },
@@ -32,6 +36,38 @@ KL.CONFIG = {
     requiredPairs: ['1', '3', '4', '13', '14', '20']
   }
 };
+
+/* Score categories → steps they are derived from (edit to match your marking scheme). */
+KL.CATEGORIES = {
+  lab7: [
+    ['Anatomical identification', [2, 4, 5, 6, 7, 8, 9]],
+    ['Procedural sequence', [1, 3, 4, 12]],
+    ['Instrument selection', 'tools'],
+    ['Femur isolation', [6]],
+    ['Tibia isolation', [7]],
+    ['Bone marrow collection from both bones', [10]],
+    ['Centrifugation', [11]],
+    ['Bone marrow suspension', [12, 'checkpoint']]
+  ],
+  lab8: [
+    ['Reagent identification', [2, 4, 5, 7]],
+    ['Experimental sequence', [1, 3, 4]],
+    ['Chromosome preparation', [2, 3, 4, 6]],
+    ['Slide preparation', [5, 7, 8]],
+    ['Microscopic examination', [9]],
+    ['Metaphase identification', [8, 9]],
+    ['Chromosome pairing', [10, 11, 12]],
+    ['Karyotyping', [12, 13, 14, 15]]
+  ]
+};
+
+/** Information the supplied material did not contain — shown in the Laboratory Guide so the instructor can complete it. */
+KL.INSTRUCTOR_INPUT = [
+  'Route of colchicine administration (dose and timing are supplied: 4 mg/kg, about 1.5–2 h before sacrifice).',
+  'Whether the 3 mL of saline/PBS is used per bone or in total, and whether the femur and tibia suspensions are pooled before centrifugation.',
+  'Rat chromosome lengths, arm positions and the assignment of pairs to Groups A–G: the karyotype shown is a TEACHING PLACEHOLDER (2n = 42) until course-approved data are supplied (js/config.js).',
+  'Course photographs for each step (drop files in assets/photos/ and list them in CONFIG.photos); until then the application uses labelled illustrations.'
+];
 
 /* -------------------------------------------------------------------------
    Idealised rat karyotype used for this exercise (2n = 42, male).
@@ -78,5 +114,5 @@ KL.KARYO = (function () {
   autosomes.concat(sex).forEach(([id, L, S]) => { pairInfo[id] = { id, L, S, T: +(L + S).toFixed(2) }; });
   const diploidTotal = +chroms.reduce((a, c) => a + c.T, 0).toFixed(2);
 
-  return { autosomes, sex, groups, rowNames, slots, chroms, pairInfo, diploidTotal, haploidTotal: +(diploidTotal / 2).toFixed(3), count: chroms.length };
+  return { placeholder: true, autosomes, sex, groups, rowNames, slots, chroms, pairInfo, diploidTotal, haploidTotal: +(diploidTotal / 2).toFixed(3), count: chroms.length };
 })();

@@ -91,7 +91,8 @@
       v += pelvis + bones + thighM + shankM + fibres +
         '<path d="M70 18 C20 60 20 110 70 130 C110 140 150 100 110 70 Z" fill="' + C.skin + '" stroke="#d9c3b0" stroke-width="2.4" opacity=".96"/>' +
         '<path d="M300 110 C340 100 370 140 340 190 C320 220 290 200 285 170 Z" fill="' + C.skin + '" stroke="#d9c3b0" stroke-width="2.4"/>';
-      if (o.regions) v += '<path d="M40 70 L120 40 L265 120 L255 190 L130 120 Z" fill="transparent" data-region="thigh-muscle" class="hot"/>' +
+      if (o.regions) v += '<path d="M70 18 C20 60 20 110 70 130 C110 140 150 100 110 70 Z" fill="transparent" data-region="skin-flap" class="hot"/><path d="M300 110 C340 100 370 140 340 190 C320 220 290 200 285 170 Z" fill="transparent" data-region="skin-flap" class="hot"/>' +
+        '<path d="M120 80 L265 150 L255 190 L130 120 Z" fill="transparent" data-region="thigh-muscle" class="hot"/>' +
         '<path d="M255 150 L280 160 L190 250 L150 240 Z" fill="transparent" data-region="shank-muscle" class="hot"/>';
     } else { // skin / incision
       v += pelvis + skinS;
